@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>agent-hint 构建·安装·运行·验证操作手册</title>
+<style>
+  :root {
+    --bg: #0f1117; --panel: #161a23; --border: #2a3040;
+    --text: #d7dce6; --dim: #8b93a5; --accent: #4f9cf9;
+    --ok: #4cc38a; --warn: #f5a623; --err: #e5534b; --code-bg: #1c212d;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    line-height: 1.7; padding: 40px 16px; max-width: 980px; margin: 0 auto;
+  }
+  h1 { font-size: 1.9em; margin-bottom: 4px; }
+  h1 + p.sub { color: var(--dim); margin-bottom: 28px; }
+  h2 {
+    font-size: 1.25em; margin: 38px 0 14px; padding-bottom: 8px;
+    border-bottom: 1px solid var(--border); color: var(--accent);
+  }
+  h2 .step { color: var(--warn); font-family: monospace; margin-right: 8px; }
+  h3 { font-size: 1.05em; margin: 20px 0 8px; }
+  p, li { font-size: 15px; }
+  ul, ol { padding-left: 24px; margin: 8px 0; }
+  li { margin: 5px 0; }
+  code {
+    background: var(--code-bg); padding: 2px 7px; border-radius: 4px;
+    font-family: "JetBrains Mono", Consolas, monospace; font-size: 13.5px; color: #e8ecf3;
+  }
+  pre {
+    background: var(--code-bg); border: 1px solid var(--border);
+    border-radius: 8px; padding: 14px 16px; overflow-x: auto; margin: 10px 0 16px;
+  }
+  pre code { background: none; padding: 0; font-size: 13px; line-height: 1.65; }
+  pre .c { color: #6b7387; } /* comment */
+  table { width: 100%; border-collapse: collapse; margin: 12px 0 18px; font-size: 14px; }
+  th, td { border: 1px solid var(--border); padding: 8px 12px; text-align: left; vertical-align: top; }
+  th { background: var(--panel); color: var(--accent); font-weight: 600; }
+  .tag { display: inline-block; padding: 1px 9px; border-radius: 10px; font-size: 12.5px; font-weight: 600; }
+  .tag.ok { background: rgba(76,195,138,.15); color: var(--ok); }
+  .tag.err { background: rgba(229,83,75,.15); color: var(--err); }
+  .tag.warn { background: rgba(245,166,35,.15); color: var(--warn); }
+  .callout {
+    border-left: 3px solid var(--warn); background: var(--panel);
+    padding: 12px 16px; border-radius: 0 8px 8px 0; margin: 14px 0; font-size: 14.5px;
+  }
+  .callout.err { border-color: var(--err); }
+  .callout.ok { border-color: var(--ok); }
+  .callout b { color: var(--warn); }
+  .callout.err b { color: var(--err); }
+  .callout.ok b { color: var(--ok); }
+  .toc { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 16px 22px; }
+  .toc a { color: var(--accent); text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+  .path { color: var(--ok); }
+  footer { margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--border); color: var(--dim); font-size: 13px; }
+</style>
+</head>
+<body>
+
+<h1>agent-hint 构建·安装·运行·验证操作手册</h1>
+<p class="sub">从源码到 web 实测的完整闭环（2026-08-26 实测总结）· 前置阅读：<a href="agent-hint-test-guide.html" style="color:var(--accent)">测试指南</a></p>
+
+<div class="toc">
+<b>目录</b>
+<ol>
+  <li><a href="#prereq">前置状态确认</a></li>
+  <li><a href="#build">构建（两步编译链）</a></li>
+  <li><a href="#install">安装检查</a></li>
+  <li><a href="#run">运行</a></li>
+  <li><a href="#verify">验证</a></li>
+  <li><a href="#teardown">停止与还原</a></li>
+  <li><a href="#faq">故障排查</a></li>
+</ol>
+</div>
+
+<h2 id="prereq">1. 前置状态确认</h2>
+
+<p>开始前确认工作区保留着这 4 处源码改动（此前已清理过文档/门禁/冗余配置，这是最小可运行集）：</p>
+
+<pre><code>cd /home/zw/code/deepseek-harness
+git status --short
+<span class="c"># 预期输出：</span>
+ M packages/llm/llm-deepseek/package.json   <span class="c"># exports 加 ./wire 子路径（手写声明，工具不会生成）</span>
+ M pnpm-lock.yaml                            <span class="c"># workspace 安装记录
+?? packages/llm/llm-deepseek/src/wire.ts    # wire 源文件（值导出：parseSse/serializeRequest 等）
+?? packages/llm/llm-agent-hint/              # 插件本体（src/tests/配置）</span></code></pre>
+
+<p>关键依赖关系（谁离不开谁）：</p>
+<table>
+<tr><th>文件</th><th>作用</th><th>缺失后果</th></tr>
+<tr><td><code class="path">src/wire.ts</code> + package.json 的 <code>./wire</code> export</td><td>agent-hint 以值导入方式引用 <code>@deepseek-ai/dsh-llm-deepseek/wire</code>（[adapter.ts:24-28]）</td><td>Node 抛 <code>ERR_PACKAGE_PATH_NOT_EXPORTED</code>，插件加载即失败</td></tr>
+<tr><td><code class="path">tsdown.config.ts</code> entry 含 <code>wire</code></td><td>构建产出 <code>lib/wire.js</code></td><td>exports 映射落空，运行时找不到模块</td></tr>
+</table>
+
+<div class="callout">
+<b>exports 是手写的、唯一的源头。</b> 仓库里 tsdown entry / files 数组 / check-workspace-constraints 全是围着 package.json 的 exports 转的"跟随者"。恢复运行能力时，exports 声明必须最先写回。
+</div>
+
+<h2 id="build">2. 构建（两步编译链）</h2>
+
+<div class="callout err">
+<b>本仓库的包没有独立的 <code>build</code> 脚本</b>（<code>package.json</code> 里 <code>scripts</code> 为空，根目录的 <code>pnpm build</code> 是全仓 + 前端的大流程，不需要）。构建必须手动走两步：<b>先 tsc 后 tsdown</b>，顺序不能反——tsdown 的 entry 指向 tsc 的产物。
+</div>
+
+<h3>Step 1 — tsc 编译（产出 lib/types/*.js）</h3>
+<pre><code>cd /home/zw/code/deepseek-harness
+npx tsc -b packages/llm/llm-deepseek --force
+npx tsc -b packages/llm/llm-agent-hint --force
+
+<span class="c"># 验证产物：</span>
+ls packages/llm/llm-deepseek/lib/types/wire.js        <span class="c"># 应存在</span>
+ls packages/llm/llm-agent-hint/lib/types/index.js     <span class="c"># 应存在</span></code></pre>
+<p><code>--force</code> 全量重编（增量模式下 wire.ts 曾出现不重编的情况，force 稳妥）。依赖包（cordis/llm 等）若有问题 tsc 会顺带报错。</p>
+
+<h3>Step 2 — 确认 tsdown entry 含 wire</h3>
+<p>检查 [tsdown.config.ts] 第 20 行 entry 是否为（缺 <code>wire</code> 就补上）：</p>
+<pre><code>entry: client ? '' : ['lib/types/{index,invariant,startup,wire}.js'],</code></pre>
+
+<h3>Step 3 — tsdown 打包（产出 lib/wire.js、lib/index.js）</h3>
+<pre><code>cd /home/zw/code/deepseek-harness
+npx tsdown --env.DSH_BUILD_FACE host
+
+<span class="c"># 验证产物：</span>
+ls packages/llm/llm-deepseek/lib/wire.js      <span class="c"># 应存在（exports ./wire 的落点）</span>
+ls packages/llm/llm-agent-hint/lib/index.js   <span class="c"># 应存在（插件入口）</span></code></pre>
+
+<div class="callout">
+<b>为什么 tsdown 报 "Cannot find entry"：</b> tsdown 一次构建整个 workspace（<code>workspace: ['vendor/*', 'packages/*/*', 'apps/cli']</code>）。如果 agent-hint 还没跑过 tsc（lib/types 为空），它会在解析阶段就失败——报错会指名 <code>[@deepseek-ai/dsh-llm-agent-hint] Cannot find entry</code>。解法就是回到 Step 1 先把两个包都 tsc 编译掉。
+</div>
+
+<h2 id="install">3. 安装检查</h2>
+
+<p>profile 安装是一次性的（此前已做过）。确认链接还在即可：</p>
+<pre><code>ls -l ~/.dsh/profiles/web/node_modules/@deepseek-ai/dsh-llm-agent-hint
+<span class="c"># 应显示符号链接 → ../../../../../code/deepseek-harness/packages/llm/llm-agent-hint</span>
+<span class="c"># link: 安装不复制文件，产物永远实时指向源码目录，构建后无需重新安装</span></code></pre>
+
+<p>若链接不存在（例如 profile 被重建），重新安装：</p>
+<pre><code>cd /home/zw/code/deepseek-harness
+pnpm dsh plugin --profile web add link:/home/zw/code/deepseek-harness/packages/llm/llm-agent-hint</code></pre>
+<p>出现 <i>"declares no dsh.bundle — installed as a plain dependency"</i> 警告是正常的（opt-in 插件本就不声明 bundle）。</p>
+
+<h2 id="run">4. 运行</h2>
+
+<h3>4.1 启动观察服务器（先于 web）</h3>
+<pre><code><span class="c"># 已在跑则跳过（pgrep 无输出即未跑）</span>
+pgrep -af agent-hint-watch.mjs
+nohup node /home/zw/code/agent-hint-watch.mjs > /home/zw/code/agent-hint-watch.log 2>&1 &
+
+<span class="c"># 健康检查：</span>
+curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:1026/v1/models   <span class="c"># 期望 200</span></code></pre>
+<p>可选环境变量：<code>PORT</code>（默认 1026）、<code>VERBOSE=1</code>（打印完整请求体）、<code>UPSTREAM=...</code>（转发真实 coordinator）。</p>
+
+<h3>4.2 启动 web</h3>
+<pre><code>cd /home/zw/code/deepseek-harness
+MOTOR_API_KEY=smoke-key pnpm dsh web
+<span class="c"># 输出 "dsh web: http://127.0.0.1:3080" 且无插件加载报错即成功</span></code></pre>
+
+<h3>4.3 配置三层自检（新环境才需要）</h3>
+<table>
+<tr><th>文件</th><th>必须满足</th><th>优先级说明</th></tr>
+<tr><td><code class="path">~/.dsh/settings.yaml</code></td><td><code>agent-default-model.provider: deepseek-agent-hint</code></td><td><b>最高</b>——保存过的 UI 选择会覆盖 patch 默认值，这是"发消息没流量"的头号原因</td></tr>
+<tr><td><code class="path">~/.dsh/profiles/web/cordis.patch.yml</code></td><td>含 <code>llm-agent-hint</code> 挂载（baseURL 指向 <code>127.0.0.1:1026/v1</code>）</td><td>中——插件挂载与路由</td></tr>
+</table>
+<p>两个文件都热重载，改完不用重启。快速验证组合树（不启动服务）：</p>
+<pre><code>cd /home/zw/code/deepseek-harness
+MOTOR_API_KEY=smoke-key pnpm dsh web --dump-config 2>&1 | grep -A8 llm-agent-hint
+<span class="c"># 能看到 provider: deepseek-agent-hint / baseURL: http://127.0.0.1:1026/v1 即正确</span></code></pre>
+
+<h2 id="verify">5. 验证</h2>
+
+<h3>5.1 浏览器操作</h3>
+<ol>
+  <li>打开 <code>http://127.0.0.1:3080</code></li>
+  <li><b>新建会话</b>（旧会话在创建时已锁定旧 provider，改设置只对新会话生效）</li>
+  <li>发第一条消息</li>
+  <li>同一会话再发第二条（观察纯身份形态）</li>
+</ol>
+
+<h3>5.2 看日志</h3>
+<pre><code>tail -f /home/zw/code/agent-hint-watch.log</code></pre>
+<p>预期形态（完整 verb 对照见<a href="agent-hint-test-guide.html#verbs" style="color:var(--accent)">测试指南 §4</a>）：</p>
+<pre><code>[hh:mm:ss] → POST /v1/chat/completions  stream=true
+[hh:mm:ss]    agent_hint: {"session_id":"session-...","session_control":{"type":"start"}}  <span class="c"># 首条</span>
+[hh:mm:ss] → POST /v1/chat/completions  stream=true
+[hh:mm:ss]    agent_hint: {"session_id":"session-..."}                                    <span class="c"># 第二条起：纯身份</span></code></pre>
+<p>标题生成等后台调用显示 <code>&lt;absent&gt;</code> 是<b>设计内行为</b>（匿名调用不扰动 KV-cache 身份）。</p>
+
+<h3>5.3 单测补充验证（可选，不依赖 web）</h3>
+<pre><code>cd /home/zw/code/deepseek-harness
+<span class="c"># 必须从仓库根目录跑（vitest 是 workspace project 模式）：</span>
+pnpm exec vitest run packages/llm/llm-agent-hint
+<span class="c"># 预期：Test Files 4 passed / Tests 36 passed</span></code></pre>
+
+<h2 id="teardown">6. 停止与还原</h2>
+
+<pre><code><span class="c"># 停 web（用 -INT 优雅退出；-9 会跳过 teardown，stop 控制请求必发不出）</span>
+pkill -INT -f "bin.ts web"
+pgrep -af "bin.ts web"          <span class="c"># 无输出 = 已退出</span>
+
+<span class="c"># 停观察服务器</span>
+pkill -f agent-hint-watch.mjs
+
+<span class="c"># 清构建产物（保留源码，git 不跟踪 lib/）</span>
+rm -f packages/llm/llm-deepseek/lib/wire.js packages/llm/llm-deepseek/lib/types/wire.*
+rm -rf packages/llm/llm-agent-hint/lib</code></pre>
+
+<div class="callout">
+<b>产物删除后的影响：</b> web 将无法加载该插件（exports 解析到不存在的 lib/wire.js）。源码、单测、静态阅读不受影响。下次要跑 web，回到第 2 节重新构建即可。
+</div>
+
+<h2 id="faq">7. 故障排查</h2>
+
+<table>
+<tr><th>症状</th><th>原因与解法</th></tr>
+<tr>
+  <td>启动报 <code>listen EADDRINUSE 127.0.0.1:3080</code></td>
+  <td>已有一个 web 实例占着端口（上次启动未停）。<code>pkill -INT -f "bin.ts web"</code> 优雅退出后再启动；<code>pgrep -af "bin.ts web"</code> 可先确认</td>
+</tr>
+<tr>
+  <td>tsdown 报 <code>Cannot find entry: ["lib/types/{index,invariant,startup,wire}.js"]</code></td>
+  <td>workspace 里某个包（报错会指名）还没跑 tsc，lib/types 为空。对指名的包先 <code>npx tsc -b &lt;包路径&gt; --force</code> 再重来 tsdown</td>
+</tr>
+<tr>
+  <td>tsc 增量编译后 wire.js 没产出</td>
+  <td>增量状态陈旧。加 <code>--force</code> 全量重编</td>
+</tr>
+<tr>
+  <td>web 启动报 <code>ERR_PACKAGE_PATH_NOT_EXPORTED</code> / 模块找不到 wire</td>
+  <td>三选一：① lib/wire.js 没构建（回第 2 节）；② package.json 的 <code>./wire</code> export 被回退了（手写补回，3 处：exports./wire、files 两行）；③ tsdown entry 没恢复 wire</td>
+</tr>
+<tr>
+  <td>web 正常回复但观察服务器零流量</td>
+  <td>请求没走 agent-hint 路由。查 <code class="path">~/.dsh/settings.yaml</code> 的 provider 是否 <code>deepseek-agent-hint</code>，改完<b>新建会话</b>再发（旧会话锁定旧路由）</td>
+</tr>
+<tr>
+  <td>vitest 报 "No test files found"</td>
+  <td>在包目录里跑的。回到仓库根目录：<code>pnpm exec vitest run packages/llm/llm-agent-hint</code></td>
+</tr>
+<tr>
+  <td>观察服务器 curl 不通</td>
+  <td>没启动或端口被占：<code>pgrep -af agent-hint-watch</code> 检查；重启见 4.1</td>
+</tr>
+<tr>
+  <td>缺 API key 报 <code>MISSING_CREDENTIAL</code></td>
+  <td>启动 web 时没带 <code>MOTOR_API_KEY=smoke-key</code>（观察服务器不校验 key，但适配器在发请求前要求它存在）</td>
+</tr>
+</table>
+
+<footer>
+来源：2026-08-26 实测会话 · 构建链路：tsc -b（lib/types）→ tsdown host face（lib/）· 详细测试场景与 verb 对照见 <a href="agent-hint-test-guide.html" style="color:var(--dim);text-decoration:underline">agent-hint-test-guide.html</a>
+</footer>
+
+</body>
+</html>
