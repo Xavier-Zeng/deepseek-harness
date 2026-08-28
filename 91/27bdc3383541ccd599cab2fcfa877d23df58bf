@@ -1,0 +1,39 @@
+tsconfig.host.json
+  s_e5dbceef0f8e5f::t_1dd79fecba04b7 215
+tsdown.config.ts
+  s_e5dbceef0f8e5f::t_781b06779f9bae 20
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.2",
+  "base_commit_sha": "9127bdc3383541ccd599cab2fcfa877d23df58bf",
+  "prompts": {},
+  "humans": {
+    "h_21bc8a63c5da9f": {
+      "author": "xavier_zw <xavier.zengwei@huawei.com>"
+    }
+  },
+  "sessions": {
+    "s_e5dbceef0f8e5f": {
+      "agent_id": {
+        "tool": "trae",
+        "id": "6a8fe5fbe063dc6029d38727",
+        "model": "glm-5.3"
+      },
+      "human_author": "xavier_zw <xavier.zengwei@huawei.com>",
+      "custom_attributes": {
+        "tool_type": "builtin",
+        "dedupe_key": "6a8fe5fbe063dc6029d38727:6a9016f0e063dc6029d387c1:afterEdit:24113bda",
+        "edit_kind": "file_edit",
+        "tool_use_id": "6a9016f0e063dc6029d387c1",
+        "operation_id": "6a9016f0e063dc6029d387c1",
+        "source_scene": "agent",
+        "runtime_client": "trae-tob-git-ai",
+        "external_session_id": "6a8fe5fbe063dc6029d38727",
+        "client_type": "ide",
+        "tool_id": "icube:applyChatSnapshotPatch",
+        "session_id": "6a8fe5fbe063dc6029d38727"
+      }
+    }
+  }
+}
