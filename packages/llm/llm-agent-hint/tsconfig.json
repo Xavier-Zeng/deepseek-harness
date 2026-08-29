@@ -21,6 +21,9 @@
       "path": "../../llm/llm"
     },
     {
+      "path": "../../core/agent"
+    },
+    {
       "path": "../../llm/llm-deepseek"
     },
     {

@@ -104,6 +104,20 @@ describe('AgentHintAdapter against a mock server', () => {
     expect(server.requests[0]).not.toHaveProperty('x-deepseek-harness-session-id')
   })
 
+  it('does not trigger the deferred resume for a background purpose', async () => {
+    const server = await mockServer([{ kind: 'sse', events: textEvents }])
+    const { bridge, verbs } = recordingBridge()
+    bridge.onSessionCreated({
+      id: SID,
+      firstLiveSeq: 7,
+      header: { parentSession: undefined },
+      events: [{ type: 'turn/start', seq: 0, time: 1, data: { turn: 1 } }],
+    } as never)
+    await generate(adapter(server.url, { bridge }), { sessionId: SID, purpose: 'compaction' })
+    expect(verbs).toEqual([])
+    expect(server.requests[0]).not.toHaveProperty('agent_hint')
+  })
+
   it('forwards the configured cache policy verbatim', async () => {
     const server = await mockServer([{ kind: 'sse', events: textEvents }])
     await generate(adapter(server.url, { cacheControl: { type: 'kv' } }), { sessionId: SID })
@@ -115,13 +129,13 @@ describe('AgentHintAdapter against a mock server', () => {
   it('never re-declares start for a seeded session', async () => {
     const server = await mockServer([{ kind: 'sse', events: textEvents }])
     const { bridge, verbs } = recordingBridge()
-    // Seed the bridge as if the session were created with prior history.
-    bridge.noteOrdinaryRequest(SID, 'deepseek-v4-flash')
     bridge.onSessionCreated({
       id: SID,
       firstLiveSeq: 7,
       header: { parentSession: undefined },
+      events: [{ type: 'turn/start', seq: 0, time: 1, data: { turn: 1 } }],
     } as never)
+    expect(verbs).toEqual([])
     await generate(adapter(server.url, { bridge }), { sessionId: SID })
     expect(server.requests[0]).toMatchObject({ agent_hint: { session_id: 'session-1' } })
     expect(server.requests[0]).not.toMatchObject({ agent_hint: { session_control: {} } })
@@ -132,6 +146,21 @@ describe('AgentHintAdapter against a mock server', () => {
     const server = await mockServer([{ kind: 'sse', events: textEvents }])
     await generate(adapter(server.url), { sessionId: SID })
     expect(server.headers[0]?.['x-deepseek-harness-session-id']).toBe('session-1')
+  })
+
+  it('pauses the previous ordinary session when a different session sends a request', async () => {
+    const server = await mockServer([
+      { kind: 'sse', events: textEvents },
+      { kind: 'sse', events: textEvents },
+    ])
+    const { bridge, verbs } = recordingBridge()
+    const adapterInstance = adapter(server.url, { bridge })
+    const second = SessionId('session-2')
+
+    await generate(adapterInstance, { sessionId: SID })
+    await generate(adapterInstance, { sessionId: second })
+    expect(verbs).toEqual(['pause'])
+    expect(server.requests[1]).toMatchObject({ agent_hint: { session_id: 'session-2' } })
   })
 
   it('stamps the hint on the prepared-call dispatch path the runtime uses', async () => {

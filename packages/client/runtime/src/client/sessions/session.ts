@@ -264,6 +264,19 @@ export class Session implements SessionFace {
   }
 
   /**
+   * Notify the Host that this session's composer draft just became non-empty.
+   * Failures are ignored: the signal only warms coordinator state and must
+   * never interfere with the composer.
+   */
+  async noteComposing(): Promise<void> {
+    try {
+      await this.api.sessions.noteComposing({ sessionId: this.sessionId })
+    } catch {
+      // Swallow transport failures only; the composer is the user's real path.
+    }
+  }
+
+  /**
    * Resolve one image referenced by this session into browser-consumable bytes.
    * @param attachmentId - opaque id found in the folded session log.
    * @returns the authenticated reference and decoded bytes.

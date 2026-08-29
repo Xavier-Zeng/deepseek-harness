@@ -287,6 +287,14 @@ export interface SessionsApi {
   Promise<RpcResponse<{ events: HistoryEntry[]; hasMore: boolean; projections?: SessionProjectionsBlock }>>
 
   /**
+   * Reports that the client composer draft just became non-empty. The Host
+   * does not resume or publish an Agent; it only emits the advisory
+   * `session/composing` signal for control-plane consumers.
+   */
+  noteComposing(request: RpcRequest<{ sessionId: SessionId }>):
+  Promise<RpcResponse<{ accepted: true }>>
+
+  /**
    * Reads a fresh advisory model directory for an ordinary session. Provider
    * lookups run independently; subagents reject with `agent-busy`.
    */

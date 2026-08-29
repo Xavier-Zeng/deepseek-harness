@@ -44,6 +44,11 @@ export interface ISession {
     signal?: AbortSignal,
   ): Promise<RpcResult<{ accepted: true }>>
   /**
+   * Notify the Host that this session's composer draft just became non-empty.
+   * The signal is advisory and is used for control-plane preloading only.
+   */
+  noteComposing(): Promise<void>
+  /**
    * Resolve one durable image referenced by this session.
    * @param attachmentId - opaque id found in the folded session log.
    * @returns the authenticated reference and decoded bytes.

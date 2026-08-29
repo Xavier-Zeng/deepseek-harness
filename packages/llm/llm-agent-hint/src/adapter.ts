@@ -98,6 +98,9 @@ export class AgentHintAdapter extends DeepSeekAdapter {
     // verb for the same session is still in flight (bounded, fail-open).
     const bridge = this.agentHint.bridge
     if (bridge !== undefined) {
+      if (options.purpose === undefined) {
+        bridge.ensureResume(options.sessionId, options.model)
+      }
       await bridge.awaitPendingOp(options.sessionId)
     }
     const facts = bridge?.facts(options.sessionId)

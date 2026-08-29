@@ -51,6 +51,8 @@ export interface SessionInputDeps {
     mode: InputSubmitMode,
     signal: AbortSignal,
   ): Promise<SubmitOutcome>
+  /** Host notification for the first user edit that makes a draft non-empty. */
+  onComposing?: () => void
   /** Command-plane image plumbing (the hub owns the conversation face and the copy). */
   commandImages: {
     /** Resolve ordered draft ids to wire payloads without sending them; rejects when an id no longer resolves. */
@@ -119,8 +121,10 @@ export class SessionInputShell implements SessionInput {
    * @param editRange - the DOM-observed edit shape, when the caller knows it
    * (narrows the machine's occurrence math; absent → diff scan).
    */
-  setDraft(text: string, editRange?: EditRange): void {
+  setDraft(text: string, editRange?: EditRange, userEdit = false): void {
+    const wasEmpty = this.snapshot.draft === ''
     this.run(this.core.dispatch({ type: 'draft-changed', draft: text, ...(editRange !== undefined ? { editRange } : {}) }))
+    if ((userEdit || editRange !== undefined) && wasEmpty && text !== '') this.deps.onComposing?.()
   }
 
   /** Append ordered image ids unless an admission transaction is locked. */

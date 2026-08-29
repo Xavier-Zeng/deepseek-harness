@@ -2374,6 +2374,7 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
         if (options.dropSessionCreateResponse) throw new Error('fixture: dropped session.create response after publication')
         return ok(request, { sessionId: created.sessionId })
       },
+      noteComposing: request => ok(request, { accepted: true as const }),
       rename: (request) => {
         const missing = requireSession(request)
         if (missing !== undefined) return missing
@@ -3179,6 +3180,7 @@ export class FixtureApiClient extends AbstractApiClient {
       case 'session.search': return this.api.sessions.search(request, signal)
       case 'session.create': return this.api.sessions.create(request)
       case 'session.history': return this.api.sessions.history(request)
+      case 'session.noteComposing': return this.api.sessions.noteComposing(request)
       case 'session.models': return this.api.sessions.models(request)
       case 'session.selectModel': return this.api.sessions.selectModel(request)
       case 'session.rename': return this.api.sessions.rename(request)

@@ -43,6 +43,7 @@ function scriptedApi(overrides: {
         hasMore: false,
         modelSelection: { provider: 'deepseek-official', model: 'deepseek-v4-flash' },
       }),
+      noteComposing: r => ok(r, { accepted: true as const }),
       models: r => ok(r, {
         current: { provider: 'deepseek-official', model: 'deepseek-v4-flash' },
         routable: true,

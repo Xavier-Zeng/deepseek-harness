@@ -80,6 +80,7 @@ interface BenchOptions {
   queue?: ConversationSnapshot['queue']
   /** The hub's steer-all face (empty-draft accelerated Enter). */
   steerQueue?: () => void
+  onComposing?: () => void
   variant?: 'hero' | 'composer'
   placeholder?: string
   t?: InputBarProps['t']
@@ -123,6 +124,7 @@ function bench(over?: BenchOptions) {
   const shell = new SessionInputShell({
     actx: SCTX,
     defaultSink: sink,
+    ...(over?.onComposing !== undefined ? { onComposing: over.onComposing } : {}),
     commandImages: { serialize: () => Promise.resolve([]), release: () => {}, unsupportedNotice: (token: string) => `${token.trim()} images-unsupported` },
     queue: {
       getSnapshot: () => session.getSnapshot().queue,
@@ -232,6 +234,30 @@ function attachmentOwner(slotCalls: readonly { key: string; owner: unknown }[]):
   }
   throw new Error('attachment slot was not rendered')
 }
+
+describe('composing notification', () => {
+  it('fires once when a user edit moves the draft from empty to non-empty', () => {
+    const onComposing = vi.fn()
+    const { shell } = bench({ onComposing })
+    shell.setDraft('h', { start: 0, end: 0, insertedLength: 1 })
+    shell.setDraft('he', { start: 1, end: 1, insertedLength: 1 })
+    expect(onComposing).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not fire for programmatic draft restoration', () => {
+    const onComposing = vi.fn()
+    const { shell } = bench({ onComposing })
+    shell.setDraft('restored draft')
+    expect(onComposing).not.toHaveBeenCalled()
+  })
+
+  it('fires for a user draft edit even when the browser provides no edit range', () => {
+    const onComposing = vi.fn()
+    const { shell } = bench({ onComposing })
+    shell.setDraft('中', undefined, true)
+    expect(onComposing).toHaveBeenCalledTimes(1)
+  })
+})
 
 describe('image draft rail', () => {
   it('collects clipboard files while preserving text from a mixed paste', () => {

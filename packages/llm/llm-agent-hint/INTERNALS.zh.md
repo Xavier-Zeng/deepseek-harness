@@ -7,12 +7,12 @@
 llm-agent-hint 是一个**可选（opt-in）的 Cordis 函数插件**，面向 MindIE-Motor coordinator（协调器）提供 DeepSeek 兼容传输。它在 `llm-deepseek` 管线（直接 `fetch` + SSE、同一套协议序列化 / 转换 / 错误码）之上叠加两层能力：
 
 - **数据面（data plane）**：普通生成请求携带 `agent_hint` 字段（会话身份、fork 谱系、缓存策略），供 coordinator 做按会话路由与 KV-cache 复用。
-- **控制面（control plane）**：harness 会话生命周期事件（创建 / 压缩 / 销毁）驱动独立的 `session_control` 管理请求（`resume` / `compact` / `stop`）。
+- **控制面（control plane）**：harness 会话生命周期与首个普通请求驱动独立的 `session_control` 管理请求（`resume` / `compact` / `stop`）。
 
 插件拥有自己的提供方路由 `deepseek-agent-hint`，绝不触碰 `deepseek-official` 路由；不挂载本包时，系统退化为普通的 `llm-deepseek`。
 
 ```
-┌──────────────┐   session/created(resume) / compaction/end(compact) / session/disposed(stop)
+┌──────────────┐   session/created(record) + 首个普通请求(resume) / compaction/end(compact) / session/disposed(stop)
 │ harness 会话 │ ─────────────────────────────────────────────────────────┐
 │   生命周期   │                                                          ▼
 └──────────────┘                                        LifecycleBridge（事件→动词）
@@ -165,16 +165,18 @@ API 密钥按 `apiKeyEnv`（默认 `MOTOR_API_KEY`）**逐请求**解析，顺�
 ```
 GenerateOptions
   │
-  ├─① bridge.awaitPendingOp(sessionId)      控制面屏障：同一会话若有在途管理动词，
+  ├─① bridge.ensureResume(sessionId, model) 种子会话首次普通请求前，补发一次
+  │                                          resume 管理请求（每个会话仅一次）
+  ├─② bridge.awaitPendingOp(sessionId)      控制面屏障：同一会话若有在途管理动词，
   │                                          最多等 pendingOpAwaitMs，超时放行（fail-open）
-  ├─② bridge.facts(sessionId)               读取会话状态：seeded / firstOrdinarySent /
+  ├─③ bridge.facts(sessionId)               读取会话状态：seeded / firstOrdinarySent /
   │                                          parentSessionId（来自 LifecycleBridge 内存表）
-  ├─③ buildAgentHint({...})                 纯函数决策：产出 wire 对象或 undefined
-  ├─④ bridge.noteOrdinaryRequest(sid, model) hint 非空时：翻转 firstOrdinarySent、
+  ├─④ buildAgentHint({...})                 纯函数决策：产出 wire 对象或 undefined
+  ├─⑤ bridge.noteOrdinaryRequest(sid, model) hint 非空时：翻转 firstOrdinarySent、
   │                                          记录 lastModel（供控制面复用）
-  ├─⑤ serializeRequest(options, defaults)   llm-deepseek 原生序列化（不含 hint）
-  ├─⑥ body.agent_hint = hint                ←—— 唯一的注入点
-  └─⑦ POST ${baseURL}/chat/completions      进入 §6.1 转发
+  ├─⑥ serializeRequest(options, defaults)   llm-deepseek 原生序列化（不含 hint）
+  ├─⑦ body.agent_hint = hint                ←—— 唯一的注入点
+  └─⑧ POST ${baseURL}/chat/completions      进入 §6.1 转发
 ```
 
 ### 5.2 buildAgentHint 判定规则
@@ -194,7 +196,7 @@ GenerateOptions
 
 关键状态由 LifecycleBridge 维护：
 
-- `seeded`：`session/created` 时 `session.firstLiveSeq > 0`，即会话带着历史创建（resume / fork / replay）。**种子会话绝不声明 `start`**——它的存活由创建时的 `resume` 管理请求声明。
+- `seeded`：`session/created` 时，`firstLiveSeq` 之前至少存在一个 `turn/start`，即会话带着真实对话历史创建（resume / fork / replay）。**种子会话绝不声明 `start`**——它会在首个普通请求前由 `ensureResume` 补发一次 `resume` 管理请求。日志里只有 `session/end-seed` 标记的空白持久化会话仍算新会话。
 - `firstOrdinarySent`：hint 非空的普通请求发出后翻转；后台调用（purpose 非空）与匿名请求**不消耗**该名额。
 
 ### 5.3 产出示例
@@ -240,7 +242,10 @@ GenerateOptions
 
 | harness 事件 | 触发条件 | 动词 | coordinator 翻译 | 屏障 |
 |---|---|---|---|---|
-| `session/created` | `firstLiveSeq > 0`（种子会话） | `resume` | 预取该会话 KV cache | 记入 pendingOp |
+| `session/created` | `firstLiveSeq > 0`（种子会话） | 仅记录 `seeded` | — | 不发送请求 |
+| 首个普通请求 | 会话为种子且尚未 `resume` | `resume` | 预取该会话 KV cache | 记入 pendingOp |
+| 输入框草稿变为非空 | 会话已暂停且尚未 `resume` | `resume` | 预取该会话 KV cache | 记入 pendingOp |
+| 前台会话切换离开 | 上一个会话已发过普通请求且进入 idle | `pause` | 卸载上一个会话 KV cache | fire-and-forget |
 | `session/event` | `compaction/end` 且无 error | `compact` | 新身份下驱逐并重建 | 记入 pendingOp |
 | `session/disposed` | — | `stop` | 驱逐 | fire-and-forget |
 
@@ -248,11 +253,11 @@ GenerateOptions
 
 1. **`start` 拒发**：`start` 只随数据面首个普通请求捎带；空 messages 的 `start` 在 coordinator 侧无效果，独立发送只会记警告。
 2. **请求体**：`{ model, messages: [], stream: false, agent_hint: { session_id, session_control: { type: verb } } }`——复用数据面端点与凭据的空 messages 非流式 chat-completions 请求。
-   - `model` 取该会话**最近一次普通请求的模型 id**（bridge 记录的 `lastModel`），无记录回退到目录首个条目（再无则 `'default'`）。该 id 必须与 coordinator AIGW 实际服务的模型 id 匹配，否则无缓存效果（fail-open 记警告）。
+   - `resume` 的 `model` 取触发它的那条普通请求的模型 id；`compact`／`stop` 的 `model` 取该会话**最近一次普通请求的模型 id**（bridge 记录的 `lastModel`），无记录回退到目录首个条目（再无则 `'default'`）。该 id 必须与 coordinator AIGW 实际服务的模型 id 匹配，否则无缓存效果（fail-open 记警告）。
 3. **重试与超时**：单次尝试超时 `controlTimeoutMs`（`AbortSignal.timeout`）；失败后固定间隔 200ms 重试至多 `retries` 次。一次有界重试覆盖 coordinator 重启的连接抖动窗口，其余失败对该动词终结。
 4. **fail-open**：任何失败（传输 / 超时 / 非 2xx）只通过 warn sink 记录警告，**绝不 reject**——控制请求是建议性的，不得把 harness 生命周期事件变成用户可见错误。
 
-**pendingOp 屏障**：`resume` / `compact` 发出期间，同一会话的普通请求在序列化前 `awaitPendingOp` 等待（上限 `pendingOpAwaitMs`），超时放行并记警告；`stop` 不设屏障（处置不得阻塞 teardown）；无在途操作时屏障是零开销 no-op。
+**pendingOp 屏障**：`resume` / `compact` 发出期间，同一会话的普通请求在序列化前 `awaitPendingOp` 等待（上限 `pendingOpAwaitMs`），超时放行并记警告；`stop` 与 `pause` 不设屏障（处置或切换离开不得阻塞前台会话）；无在途操作时屏障是零开销 no-op。
 
 ## 7. 本地验证与测试
 

@@ -145,6 +145,16 @@ export const sessionHistoryRequestSchema = z.object({
   maxMessages: z.number().int().positive().optional(),
 }) satisfies z.ZodType<Wire<RequestPayload<'session.history'>>>
 
+/** session.noteComposing request payload (the session whose draft became non-empty). */
+export const sessionNoteComposingRequestSchema = z.object({
+  sessionId: sessionIdSchema,
+}) satisfies z.ZodType<Wire<RequestPayload<'session.noteComposing'>>>
+
+/** session.noteComposing response value. */
+export const sessionNoteComposingValueSchema = z.object({
+  accepted: z.literal(true),
+}) satisfies z.ZodType<Wire<ResponseValue<'session.noteComposing'>>>
+
 /** Complete provider/model selection. */
 export const modelSelectionSchema = z.object({
   provider: z.string().min(1),

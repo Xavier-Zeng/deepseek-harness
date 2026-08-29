@@ -442,7 +442,7 @@ export function InputBar({
     const pending = pendingEditRef.current
     pendingEditRef.current = null
     safariNativeShrinkRef.current = safari && next.length < draft.length
-    keyboard.setDraft(next, editRangeOf(pending, draft.length, next.length))
+    keyboard.setDraft(next, editRangeOf(pending, draft.length, next.length), true)
     // selectionStart is number|null in lib.dom; the type-aware lint program narrows it.
     // oxlint-disable-next-line typescript/no-unnecessary-condition
     keyboard.track(next, e.target.selectionStart ?? next.length)

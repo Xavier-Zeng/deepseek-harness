@@ -4,7 +4,7 @@
 
 面向 MindIE-Motor coordinator（协调器）的 DeepSeek 兼容传输：包装 `llm-deepseek` 管线（直接 `fetch` + SSE，同一套协议序列化、转换与错误码），使普通请求携带 coordinator 的 `agent_hint` 字段，并让 harness 会话生命周期事件驱动独立的 `session_control` 管理请求。本包是可选（opt-in）的——它拥有自己的提供方路由，绝不触碰 `deepseek-official` 路由；不挂载本包则退化为普通的 `llm-deepseek`。
 
-一个插件内含两个平面。**数据面（data plane）** 是纯注入：`buildAgentHint` 逐请求决定协议 body 是否携带 `session_id`（连同 fork（分叉）谱系与静态缓存策略），以及新会话的首个普通请求是否声明 `session_control: start`。**控制面（control plane）** 是生命周期桥：种子（seeded）会话的 `session/created` 请求 `resume` 预取，成功的 `compaction/end` 请求 `compact`，`session/disposed` 请求终结性的 `stop`——每个动词都是一条空 messages 的 chat-completions 请求，其 `agent_hint.session_control` 动词由 coordinator 翻译为上下文管理操作。控制请求是建议性的并 fail-open（失败放行）：失败只记录警告，绝不拒绝触发它的 harness 工作。
+一个插件内含两个平面。**数据面（data plane）** 是纯注入：`buildAgentHint` 逐请求决定协议 body 是否携带 `session_id`（连同 fork（分叉）谱系与静态缓存策略），以及新会话的首个普通请求是否声明 `session_control: start`。**控制面（control plane）** 是生命周期桥：`session/created` 只记录种子历史，该会话的**首个普通请求**随后请求 `resume` 预取；成功的 `compaction/end` 请求 `compact`，`session/disposed` 请求终结性的 `stop`。每个控制动词都是一条空 messages 的 chat-completions 请求，其 `agent_hint.session_control` 动词由 coordinator 翻译为上下文管理操作。控制请求是建议性的并 fail-open（失败放行）：失败只记录警告，绝不拒绝触发它的 harness 工作。
 
 包根入口导出 Cordis 插件约定、`AgentHintAdapter`、`buildAgentHint`、`SessionControlClient` 与 `LifecycleBridge`；协议类型（`AgentHintWire`、`SessionControlVerb`）供测试与集成使用。
 
@@ -42,7 +42,7 @@
 1. 携带已定义 `purpose`（`compaction`、`session-title` 等）的请求保持无前缀——后台调用不得扰动活跃会话的 KV-cache 身份。
 2. 不带 `sessionId` 的请求保持匿名（完全不携带 `agent_hint`）。
 3. 只要会话带 fork 谱系创建，就附加 `parent_session_id`；只要配置了 `cache_control` 就附加之。两者也会随携带动词的请求同行。
-4. `session_control: {type: 'start'}` 只随**新**（非种子）会话的首个普通请求同行；种子会话（resume／fork／replay）绝不声明 `start`。
+4. `session_control: {type: 'start'}` 只随**新**（非种子）会话的首个普通请求同行；种子会话（resume／fork／replay）绝不声明 `start`。当构造历史在 `firstLiveSeq` 之前至少含有一个 `turn/start` 时，会话才是种子会话。日志里只有 `session/end-seed` 标记的空白持久化会话仍算新会话，会声明 `start`。
 
 客户端从不同时发出 `session_control` 与 `context_management`——单动词枚举使互斥规则在结构上不可能违反。在不支持 `session_control` 的旧 coordinator 上，随请求捎带的 `start` 落入 `raw_extra`（无害），管理动词返回 HTTP 400，fail-open 并记录警告。
 
@@ -50,12 +50,14 @@
 
 | harness 事件 | 动词 | coordinator 翻译 |
 |---|---|---|
-| `session/created`（种子） | `resume` | 预取该会话的 KV cache |
+| 首个普通请求（种子） | `resume` | 预取该会话的 KV cache |
+| 输入框草稿变为非空 | `resume` | 在下次提示前预取已暂停会话的 KV cache |
+| 前台会话切换离开 | `pause` | 卸载上一个会话的 KV cache |
 | `compaction/end`（成功） | `compact` | 在新身份下驱逐并重建 |
 | `session/disposed` | `stop` | 驱逐 |
 | 首个普通请求（新会话） | `start` | 声明存活（仅随请求捎带，绝不独立发送） |
 
-管理请求复用数据面的端点与凭据：一条空 messages、非流式的 chat-completions 请求，其 `agent_hint.session_control` 指明动词。每个请求携带该会话最近观测到的模型 id（回退到首个 catalog 条目）——它必须与 coordinator 的 AIGW 所服务模型 id 匹配。一次有界重试覆盖 coordinator 重启造成的连接抖动窗口；其余失败对该动词均为终结性。`stop` 是 fire-and-forget（发起即忘；处置不得阻塞 teardown）；`resume` 与 `compact` 另外布防 **pendingOp 屏障**：同一会话的普通请求在序列化前会等待进行中的动词——最多 `pendingOpAwaitMs`——然后照常进行（fail-open）。没有挂起操作时屏障是 no-op，零额外延迟。
+管理请求复用数据面的端点与凭据：一条空 messages、非流式的 chat-completions 请求，其 `agent_hint.session_control` 指明动词。`resume` 携带触发它的那条普通请求的模型 id；`compact` 与 `stop` 携带该会话最近观测到的模型 id，无观测值时回退到首个 catalog 条目。该 id 必须与 coordinator 的 AIGW 所服务模型 id 匹配。一次有界重试覆盖 coordinator 重启造成的连接抖动窗口；其余失败对该动词均为终结性。`stop` 与 `pause` 是 fire-and-forget（发起即忘；处置或切换离开不得阻塞前台会话）；`resume` 与 `compact` 另外布防 **pendingOp 屏障**：同一会话的普通请求在序列化前会等待进行中的动词——最多 `pendingOpAwaitMs`——然后照常进行（fail-open）。没有挂起操作时屏障是 no-op，零额外延迟。
 
 ## 模型体验
 
@@ -68,6 +70,6 @@
 ## 已知限制与暂缓事项
 
 - **在 coordinator 的 V1 设计下，管理请求仍会产生一次极小的生成**——空 messages 请求会跑一遍 chat 管线；操作极少（每次生命周期转换一次），在出现 coordinator 侧成本顾虑之前，暂缓用 `max_tokens: 1` 封顶的实验。
-- **空闲 `pause` 暂缓**——v1 交付 `start`／`resume`／`compact`／`stop`；`pause` 需要空闲看门狗、pause/resume 状态跟踪，以及 v1 未定义的空闲判定策略。
+- **基于定时器的空闲 `pause` 暂缓**——现在当前台会话从一个已经跑过 turn 的会话切换离开，并在该会话进入 idle 后，会发出 `pause`；基于空闲时长的策略尚未定义。
 - **`session/disposed` 可能与进程 teardown 竞态**——终结性 `stop` 是尽力而为；coordinator 的 KV TTL 与动词幂等性是兜底。
-- **控制面模型 id 是部署事实**——最近观测到的普通请求模型（或首个 catalog 条目）必须与 AIGW 配置的模型 id 匹配；不匹配的 id 会 fail-open 记录警告，且无缓存效果。
+- **控制面模型 id 是部署事实**——`resume` 使用触发它的普通请求模型，`compact`／`stop` 使用最近观测到的普通请求模型（或首个 catalog 条目）。该 id 必须与 AIGW 配置的模型 id 匹配；不匹配的 id 会 fail-open 记录警告，且无缓存效果。

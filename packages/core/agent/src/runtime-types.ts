@@ -215,6 +215,13 @@ declare module '@deepseek-ai/cordis' {
      * @mode emit
      */
     'agent/session-start'(this: Scoped<Agent>, payload: { agent: Agent; source: SessionStartSource }): void
+    /**
+     * A client reported that a session's composer draft became non-empty.
+     * Advisory only: the Host never resumes or publishes an Agent from it.
+     * @param sessionId - session whose composer became active.
+     * @mode emit
+     */
+    'session/composing'(sessionId: SessionId): void
 
     // ---- the machine's extension points ----
     /**

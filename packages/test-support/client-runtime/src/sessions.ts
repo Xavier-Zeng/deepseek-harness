@@ -123,6 +123,14 @@ export class FixtureSession implements SessionFace {
   }
 
   /**
+   * Fail-loud stub; supply `noteComposing` on the fixture's session face to exercise it.
+   * @returns never — always throws.
+   */
+  noteComposing(): never {
+    throw new Error(`test session "${this.sessionId}": noteComposing is not stubbed — supply it on the fixture's session face`)
+  }
+
+  /**
    * Fail-loud stub; supply `loadOlder` on the fixture's session face to exercise it.
    * @returns never — always throws.
    */

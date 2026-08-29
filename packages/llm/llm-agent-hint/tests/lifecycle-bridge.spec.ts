@@ -6,6 +6,7 @@ import type { SessionControlClient } from '../src/control-client.ts'
 import type { SessionControlVerb } from '../src/types.ts'
 
 const SID = SessionId('session-1')
+const OTHER = SessionId('session-2')
 const PARENT = SessionId('parent-1')
 
 /** Minimal session shape the bridge reads: identity, seed marker, lineage. */
@@ -13,11 +14,16 @@ function sessionOf(overrides: {
   id?: ReturnType<typeof SessionId>
   firstLiveSeq?: number
   parentSession?: ReturnType<typeof SessionId>
+  events?: SessionEvent[]
 } = {}): Session {
+  const firstLiveSeq = overrides.firstLiveSeq ?? 0
   return {
     id: overrides.id ?? SID,
-    firstLiveSeq: overrides.firstLiveSeq ?? 0,
+    firstLiveSeq,
     header: { parentSession: overrides.parentSession },
+    events: overrides.events ?? (firstLiveSeq > 0
+      ? [{ type: 'turn/start', seq: 0, time: 1, data: { turn: 1 } }] as SessionEvent[]
+      : []),
   } as unknown as Session
 }
 
@@ -46,10 +52,12 @@ function makeBridge(): { bridge: LifecycleBridge; calls: RecordedCall[] } {
 }
 
 describe('LifecycleBridge', () => {
-  it('requests a resume prefetch for a seeded session on creation', () => {
+  it('records a seeded session without sending resume until the first ordinary request', () => {
     const { bridge, calls } = makeBridge()
     bridge.onSessionCreated(sessionOf({ firstLiveSeq: 5 }))
-    expect(calls).toEqual([{ verb: 'resume', sessionId: 'session-1', model: undefined }])
+    expect(calls).toEqual([])
+    bridge.ensureResume(SID, 'deepseek-v4-flash')
+    expect(calls).toEqual([{ verb: 'resume', sessionId: 'session-1', model: 'deepseek-v4-flash' }])
   })
 
   it('keeps fork lineage visible to the data plane', () => {
@@ -67,6 +75,17 @@ describe('LifecycleBridge', () => {
     bridge.onSessionCreated(sessionOf())
     expect(calls).toEqual([])
     expect(bridge.facts(SID)).toMatchObject({ seeded: false })
+  })
+
+  it('treats a blank persisted session with only an end-seed marker as fresh', () => {
+    const { bridge, calls } = makeBridge()
+    bridge.onSessionCreated(sessionOf({
+      firstLiveSeq: 1,
+      events: [{ type: 'session/end-seed', seq: 0, time: 1, data: {} }] as SessionEvent[],
+    }))
+    bridge.ensureResume(SID, 'deepseek-v4-flash')
+    expect(calls).toEqual([])
+    expect(bridge.facts(SID)).toMatchObject({ seeded: false, firstOrdinarySent: false })
   })
 
   it('requests a compact after a successful compaction', () => {
@@ -111,6 +130,7 @@ describe('LifecycleBridge', () => {
     } as unknown as SessionControlClient
     const bridge = new LifecycleBridge({ client, pendingOpAwaitMs: 1_000 })
     bridge.onSessionCreated(sessionOf({ firstLiveSeq: 3 }))
+    bridge.ensureResume(SID, 'deepseek-v4-flash')
 
     let barrierSettled = false
     const barrier = bridge.awaitPendingOp(SID).then(() => { barrierSettled = true })
@@ -126,7 +146,116 @@ describe('LifecycleBridge', () => {
     const client = { send: () => gate } as unknown as SessionControlClient
     const bridge = new LifecycleBridge({ client, pendingOpAwaitMs: 10 })
     bridge.onSessionCreated(sessionOf({ firstLiveSeq: 3 }))
+    bridge.ensureResume(SID, 'deepseek-v4-flash')
     await expect(bridge.awaitPendingOp(SID)).resolves.toBeUndefined()
+  })
+
+  it('sends resume once across repeated ordinary requests', () => {
+    const { bridge, calls } = makeBridge()
+    bridge.onSessionCreated(sessionOf({ firstLiveSeq: 5 }))
+    bridge.ensureResume(SID, 'deepseek-v4-flash')
+    bridge.ensureResume(SID, 'deepseek-v4-flash')
+    expect(calls).toEqual([{ verb: 'resume', sessionId: 'session-1', model: 'deepseek-v4-flash' }])
+  })
+
+  it('does not send resume for an anonymous or fresh session', () => {
+    const { bridge, calls } = makeBridge()
+    bridge.ensureResume(undefined, 'deepseek-v4-flash')
+    bridge.onSessionCreated(sessionOf())
+    bridge.ensureResume(SID, 'deepseek-v4-flash')
+    expect(calls).toEqual([])
+  })
+
+  it('marks the previous ordinary session for pause and sends it when it becomes idle', () => {
+    const { bridge, calls } = makeBridge()
+    bridge.onAgentStatus(SID, 'running')
+    bridge.noteOrdinaryRequest(SID, 'model-a')
+    bridge.noteOrdinaryRequest(OTHER, 'model-b')
+    expect(calls).toEqual([])
+
+    bridge.onAgentStatus(SID, 'idle')
+    expect(calls).toEqual([{ verb: 'pause', sessionId: 'session-1', model: 'model-a' }])
+  })
+
+  it('sends pause immediately when the previous session is already idle', () => {
+    const { bridge, calls } = makeBridge()
+    bridge.noteOrdinaryRequest(SID, 'model-a')
+    bridge.noteOrdinaryRequest(OTHER, 'model-b')
+    expect(calls).toEqual([{ verb: 'pause', sessionId: 'session-1', model: 'model-a' }])
+  })
+
+  it('pauses each switched-away session once as the foreground moves on', () => {
+    const { bridge, calls } = makeBridge()
+    bridge.onAgentStatus(SID, 'running')
+    bridge.noteOrdinaryRequest(SID, 'model-a')
+    bridge.noteOrdinaryRequest(OTHER, 'model-b')
+    bridge.noteOrdinaryRequest(SessionId('session-3'), 'model-c')
+    bridge.onAgentStatus(SID, 'idle')
+    expect(calls).toEqual([
+      { verb: 'pause', sessionId: 'session-2', model: 'model-b' },
+      { verb: 'pause', sessionId: 'session-1', model: 'model-a' },
+    ])
+  })
+
+  it('cancels a pending pause when the previous session becomes active again', () => {
+    const { bridge, calls } = makeBridge()
+    bridge.onAgentStatus(SID, 'running')
+    bridge.noteOrdinaryRequest(SID, 'model-a')
+    bridge.noteOrdinaryRequest(OTHER, 'model-b')
+    bridge.noteOrdinaryRequest(SID, 'model-a')
+    bridge.onAgentStatus(SID, 'idle')
+    expect(calls).toEqual([{ verb: 'pause', sessionId: 'session-2', model: 'model-b' }])
+
+    bridge.noteOrdinaryRequest(OTHER, 'model-b')
+    bridge.onAgentStatus(SID, 'idle')
+    expect(calls).toEqual([
+      { verb: 'pause', sessionId: 'session-2', model: 'model-b' },
+      { verb: 'pause', sessionId: 'session-1', model: 'model-a' },
+    ])
+  })
+
+  it('resumes a paused session once when it starts composing again', () => {
+    const { bridge, calls } = makeBridge()
+    bridge.onSessionCreated(sessionOf({ firstLiveSeq: 5 }))
+    bridge.ensureResume(SID, 'model-a')
+    bridge.onSessionComposing(SID)
+    expect(calls).toEqual([{ verb: 'resume', sessionId: 'session-1', model: 'model-a' }])
+
+    bridge.onSessionComposing(SID)
+    expect(calls).toEqual([{ verb: 'resume', sessionId: 'session-1', model: 'model-a' }])
+  })
+
+  it('sends a second resume after a pause clears the resume-sent guard', () => {
+    const { bridge, calls } = makeBridge()
+    bridge.onSessionCreated(sessionOf({ firstLiveSeq: 5 }))
+    bridge.ensureResume(SID, 'model-a')
+    bridge.noteOrdinaryRequest(SID, 'model-a')
+    bridge.noteOrdinaryRequest(OTHER, 'model-b')
+    expect(calls).toEqual([
+      { verb: 'resume', sessionId: 'session-1', model: 'model-a' },
+      { verb: 'pause', sessionId: 'session-1', model: 'model-a' },
+    ])
+
+    bridge.onSessionComposing(SID)
+    expect(calls).toEqual([
+      { verb: 'resume', sessionId: 'session-1', model: 'model-a' },
+      { verb: 'pause', sessionId: 'session-1', model: 'model-a' },
+      { verb: 'resume', sessionId: 'session-1', model: 'model-a' },
+    ])
+  })
+
+  it('resumes a session that started fresh but has run a turn and been paused', () => {
+    const { bridge, calls } = makeBridge()
+    bridge.onSessionCreated(sessionOf())
+    bridge.noteOrdinaryRequest(SID, 'model-a')
+    bridge.noteOrdinaryRequest(OTHER, 'model-b')
+    expect(calls).toEqual([{ verb: 'pause', sessionId: 'session-1', model: 'model-a' }])
+
+    bridge.onSessionComposing(SID)
+    expect(calls).toEqual([
+      { verb: 'pause', sessionId: 'session-1', model: 'model-a' },
+      { verb: 'resume', sessionId: 'session-1', model: 'model-a' },
+    ])
   })
 
   it('returns unknown-session facts for anonymous requests', () => {

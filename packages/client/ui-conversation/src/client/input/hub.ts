@@ -78,6 +78,7 @@ export class InputHub implements SessionInputResolver {
       popup: () => this.popup(actx),
       queue: queueReadFaceOf(session),
       defaultSink: (text, imageIds, mode, signal) => this.sink(session, text, imageIds, mode, signal),
+      onComposing: () => { void session.noteComposing() },
       steerQueue: () => { void this.steerQueue(session, shell) },
       commandImages: {
         serialize: ids => this.conversation().serializeDraftImages(ids),

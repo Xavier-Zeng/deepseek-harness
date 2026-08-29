@@ -5498,6 +5498,9 @@ importers:
       '@deepseek-ai/cordis-plugin-loader':
         specifier: workspace:^
         version: link:../../../vendor/loader
+      '@deepseek-ai/dsh-agent':
+        specifier: workspace:^
+        version: link:../../core/agent
       '@deepseek-ai/dsh-anonymous-user-id':
         specifier: workspace:^
         version: link:../../identity/anonymous-user-id

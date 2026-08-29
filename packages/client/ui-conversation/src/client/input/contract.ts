@@ -101,7 +101,7 @@ export interface ComposerKeyboard {
   /** Live machine state for event-handler reads (render reads go through useInput). */
   readonly snapshot: InputState
   /** Draft write with the DOM-observed edit shape (narrows occurrence math). */
-  setDraft(text: string, editRange?: EditRange): void
+  setDraft(text: string, editRange?: EditRange, userEdit?: boolean): void
   /** Submit with an explicit delivery mode resolved by the keyboard policy. */
   submit(mode: InputSubmitMode): void
   /**

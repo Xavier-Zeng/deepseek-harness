@@ -3,8 +3,9 @@
  * provider route on `ctx.llm`: a DeepSeek-compatible transport aimed at a
  * MindIE-Motor coordinator, whose ordinary requests carry the `agent_hint`
  * field (session identity, optional fork lineage, optional cache policy)
- * and whose session lifecycle events drive standalone `session_control`
- * manage requests (`resume`/`compact`/`stop`) against the same endpoint.
+ * and whose session lifecycle events plus the first ordinary request of a
+ * seeded session drive standalone `session_control` manage requests
+ * (`resume`/`compact`/`stop`) against the same endpoint.
  * The transport layer is the `llm-deepseek` pipeline, re-exported and
  * wrapped; connection facts resolve per request exactly as in
  * `llm-deepseek`, and every control-plane failure is fail-open (WARN only).

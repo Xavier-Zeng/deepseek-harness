@@ -2181,6 +2181,12 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
         }
       },
 
+      noteComposing(request) {
+        const { sessionId } = request.payload
+        ctx.emit('session/composing', sessionId)
+        return Promise.resolve(ok(request, { accepted: true }))
+      },
+
       async models(request) {
         const { sessionId } = request.payload
         const found = await agentFor(sessionId)
