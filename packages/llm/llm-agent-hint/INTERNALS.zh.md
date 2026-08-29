@@ -248,6 +248,7 @@ GenerateOptions
 | 前台会话切换离开 | 上一个会话已发过普通请求且进入 idle | `pause` | 卸载上一个会话 KV cache | fire-and-forget |
 | `session/event` | `compaction/end` 且无 error | `compact` | 新身份下驱逐并重建 | 记入 pendingOp |
 | `session/disposed` | — | `stop` | 驱逐 | fire-and-forget |
+| `workspace/session-archived` | 归档会话成功 | `stop` | 驱逐 | fire-and-forget |
 
 [SessionControlClient.send](src/control-client.ts) 把动词转成一条独立请求：
 

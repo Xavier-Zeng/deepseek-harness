@@ -55,6 +55,7 @@ The client never emits `session_control` alongside `context_management` — the 
 | foreground session changes away | `pause` | offload the previous session's KV cache |
 | `compaction/end` (success) | `compact` | evict and rebuild under the new identity |
 | `session/disposed` | `stop` | evict |
+| `workspace/session-archived` | `stop` | evict the archived session |
 | first ordinary request (fresh) | `start` | declare liveness (piggybacked, never standalone) |
 
 Manage requests reuse the data plane's endpoint and credentials: an empty-messages, non-streaming chat-completions request whose `agent_hint.session_control` names the verb. `resume` carries the model id of the ordinary request that triggered it; `compact` and `stop` carry the session's last observed model id, falling back to the first catalog entry. The id must match a model id the coordinator's AIGW serves. One bounded retry covers the flapping-connection window of a coordinator restart; every other failure is terminal for that verb. `stop` and `pause` are fire-and-forget (a disposal or switch-away must not block the foreground session); `resume` and `compact` additionally arm a **pendingOp barrier**: an ordinary request for the same session waits — up to `pendingOpAwaitMs` — for the in-flight verb before serializing, then proceeds anyway (fail-open). With no pending op the barrier is a no-op and adds zero latency.

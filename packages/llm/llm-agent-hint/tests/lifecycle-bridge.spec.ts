@@ -258,6 +258,16 @@ describe('LifecycleBridge', () => {
     ])
   })
 
+  it('requests a terminal stop when a session is archived', async () => {
+    const { bridge, calls } = makeBridge()
+    bridge.noteOrdinaryRequest(SID, 'model-a')
+    bridge.onSessionArchived(SID)
+    expect(calls).toEqual([{ verb: 'stop', sessionId: 'session-1', model: 'model-a' }])
+    // Archiving is advisory: the session may stay live and be unarchived.
+    await new Promise(resolve => setImmediate(resolve))
+    expect(bridge.facts(SID)).toMatchObject({ firstOrdinarySent: true })
+  })
+
   it('returns unknown-session facts for anonymous requests', () => {
     const { bridge } = makeBridge()
     expect(bridge.facts(undefined)).toEqual({

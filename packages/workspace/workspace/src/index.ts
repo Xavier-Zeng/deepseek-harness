@@ -251,6 +251,7 @@ export class WorkspaceRegistry extends Service {
       }
       const state = this.requireState()
       await this.setState({ ...state, archivedSessionIds: [...state.archivedSessionIds, sessionId] })
+      this.ctx.emit('workspace/session-archived', sessionId)
     })
   }
 

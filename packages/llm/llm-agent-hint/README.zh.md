@@ -55,6 +55,7 @@
 | 前台会话切换离开 | `pause` | 卸载上一个会话的 KV cache |
 | `compaction/end`（成功） | `compact` | 在新身份下驱逐并重建 |
 | `session/disposed` | `stop` | 驱逐 |
+| `workspace/session-archived` | `stop` | 驱逐已归档会话 |
 | 首个普通请求（新会话） | `start` | 声明存活（仅随请求捎带，绝不独立发送） |
 
 管理请求复用数据面的端点与凭据：一条空 messages、非流式的 chat-completions 请求，其 `agent_hint.session_control` 指明动词。`resume` 携带触发它的那条普通请求的模型 id；`compact` 与 `stop` 携带该会话最近观测到的模型 id，无观测值时回退到首个 catalog 条目。该 id 必须与 coordinator 的 AIGW 所服务模型 id 匹配。一次有界重试覆盖 coordinator 重启造成的连接抖动窗口；其余失败对该动词均为终结性。`stop` 与 `pause` 是 fire-and-forget（发起即忘；处置或切换离开不得阻塞前台会话）；`resume` 与 `compact` 另外布防 **pendingOp 屏障**：同一会话的普通请求在序列化前会等待进行中的动词——最多 `pendingOpAwaitMs`——然后照常进行（fail-open）。没有挂起操作时屏障是 no-op，零额外延迟。

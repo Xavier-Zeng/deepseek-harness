@@ -873,6 +873,16 @@ describe('workspace mutation and status', () => {
 })
 
 describe('registry-global session archive', () => {
+  it('emits workspace/session-archived after a durable archive', async () => {
+    const dir = await makeDir('archive-event')
+    const result = await harness({ sessions: [header('event', dir, 100)] })
+    const archived: SessionId[] = []
+    result.ctx.on('workspace/session-archived', (sessionId) => { archived.push(sessionId) })
+
+    await result.registry.archiveSession(SessionId('event'))
+    expect(archived).toEqual([SessionId('event')])
+  })
+
   it('archives durably in order, idempotently skips repeats, and leaves accounting untouched', async () => {
     const dir = await makeDir('archive-home')
     const result = await harness({ sessions: [header('kept', dir, 100), header('gone', dir, 200)] })

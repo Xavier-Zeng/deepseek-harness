@@ -8,6 +8,17 @@
 import type { Branded } from '@deepseek-ai/dsh-brand'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 
+declare module '@deepseek-ai/cordis' {
+  interface Events {
+    /**
+     * A session became hidden from every workspace grouping surface.
+     * @param sessionId - the archived session identity.
+     * @mode emit
+     */
+    'workspace/session-archived'(sessionId: SessionId): void
+  }
+}
+
 /**
  * Identifies one workspace record. A generated uuid, never the path: path
  * normalization rewrites paths, and a reference anchor must stay stable.

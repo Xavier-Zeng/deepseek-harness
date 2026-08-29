@@ -5531,6 +5531,9 @@ importers:
       '@deepseek-ai/dsh-timeout':
         specifier: workspace:^
         version: link:../../util/timeout
+      '@deepseek-ai/dsh-workspace':
+        specifier: workspace:^
+        version: link:../../workspace/workspace
 
   packages/llm/llm-deepseek:
     dependencies:

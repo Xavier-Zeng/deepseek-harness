@@ -4,8 +4,9 @@
  * session; the first ordinary request then requests the `resume` prefetch
  * through {@link ensureResume}. A change in the foreground session requests
  * a `pause` once the previous session reaches idle; a successful
- * `compaction/end` requests a `compact` (evict-and-rebuild), and
- * `session/disposed` requests a terminal `stop` (evict).
+ * `compaction/end` requests a `compact` (evict-and-rebuild),
+ * `session/disposed` requests a terminal `stop` (evict), and
+ * `workspace/session-archived` requests an advisory `stop`.
  * The bridge also tracks, per session, whether the first ordinary request
  * already carried the `start` declaration, and exposes a bounded fail-open
  * barrier (`awaitPendingOp`) so a request that races an in-flight manage
@@ -20,6 +21,8 @@ import type { Session, SessionEvent } from '@deepseek-ai/dsh-session'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 // Type-only: merges 'compaction/start'/'compaction/end' into SessionEventMap.
 import type {} from '@deepseek-ai/dsh-compaction/types'
+// Type-only: merges 'workspace/session-archived' into the Events map.
+import type {} from '@deepseek-ai/dsh-workspace/types'
 import type { SessionControlClient } from './control-client.ts'
 
 /** Warning sink shared with the control client. */
@@ -72,6 +75,7 @@ export class LifecycleBridge {
     ctx.on('session/created', (session) => { this.onSessionCreated(session) }, { global: true })
     ctx.on('session/event', (session, event) => { this.onSessionEvent(session, event) }, { global: true })
     ctx.on('session/disposed', (session) => { this.onSessionDisposed(session) }, { global: true })
+    ctx.on('workspace/session-archived', (sessionId) => { this.onSessionArchived(sessionId) }, { global: true })
     ctx.on('agent/status', ({ agent, status }) => { this.onAgentStatus(agent.id, status) }, { global: true })
     ctx.on('session/composing', (sessionId) => { this.onSessionComposing(sessionId) }, { global: true })
   }
@@ -234,6 +238,18 @@ export class LifecycleBridge {
     const state = this.states.get(id)
     void this.options.client.send('stop', id, state?.lastModel)
       .then(() => this.states.delete(id))
+  }
+
+  /**
+   * `workspace/session-archived`: advisory evict. The session may stay live
+   * and be unarchived later, so tracked state is kept.
+   * @param sessionId - the session that just became archived.
+   */
+  onSessionArchived(sessionId: SessionId): void {
+    const id = String(sessionId)
+    const state = this.states.get(id)
+    if (state !== undefined) state.pausePending = false
+    void this.options.client.send('stop', id, state?.lastModel)
   }
 
   private markForPause(id: string): void {
