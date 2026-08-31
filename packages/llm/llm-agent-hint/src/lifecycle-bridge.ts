@@ -128,7 +128,9 @@ export class LifecycleBridge {
   /**
    * Record one ordinary request: flips `firstOrdinarySent` (so the next
    * request never re-declares `start`) and remembers the model id for
-   * later manage requests.
+   * later manage requests. `seeded` stays a constructor fact: only
+   * `session/created` sets it, so a live fresh session never earns a
+   * `resume` prefetch between its consecutive ordinary requests.
    * @param sessionId - session identity; `undefined` requests are ignored.
    * @param model - model id reused by later manage requests.
    */
@@ -140,7 +142,6 @@ export class LifecycleBridge {
     }
     this.lastOrdinarySessionId = id
     const state = this.state(id)
-    state.seeded = true
     state.firstOrdinarySent = true
     state.lastModel = model
     state.pausePending = false
@@ -177,8 +178,11 @@ export class LifecycleBridge {
   }
 
   /**
-   * Request the deferred `resume` prefetch for a seeded session once, just
-   * before its first ordinary request. Anonymous and fresh sessions no-op.
+   * Request the deferred `resume` prefetch once, just before the ordinary
+   * request (or composer draft) that needs it. Fires only when the
+   * coordinator's KV for the session may actually be gone: the session was
+   * created with prior history (`seeded`), or it was previously `pause`d
+   * (`pauseSent`). Anonymous, live-fresh, and already-resumed sessions no-op.
    * @param sessionId - the session the request belongs to.
    * @param model - the model id the resumed request will use.
    */
@@ -186,7 +190,7 @@ export class LifecycleBridge {
     if (sessionId === undefined) return
     const id = String(sessionId)
     const state = this.states.get(id)
-    if (state === undefined || !state.seeded || state.resumeSent) return
+    if (state === undefined || !(state.seeded || state.pauseSent) || state.resumeSent) return
     state.resumeSent = true
     this.track(id, this.options.client.send('resume', id, model))
   }

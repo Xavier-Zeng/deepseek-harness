@@ -10,7 +10,7 @@ English | [中文](2026-08-29-defer-agent-hint-resume-until-first-request.zh.md)
 
 ## Decision
 
-`LifecycleBridge.onSessionCreated` records the seeded flag and fork parent. A session is seeded only when its constructor history contains at least one `turn/start` before `firstLiveSeq`; a blank persisted session with only an `session/end-seed` marker remains fresh. The bridge gains `ensureResume(sessionId, model)`, called by `AgentHintAdapter.stream()` for an ordinary request (no defined `purpose`) before the existing pending-op barrier. The method sends `resume` once per seeded session, using the triggering request's model id, then marks the session resumed so concurrent or later requests do not duplicate it. Background-purpose requests still do not trigger a resume, and the ordinary request still waits for the in-flight resume through the existing barrier.
+`LifecycleBridge.onSessionCreated` records the seeded flag and fork parent. A session is seeded only when its constructor history contains at least one `turn/start` before `firstLiveSeq`; a blank persisted session with only an `session/end-seed` marker remains fresh, and `noteOrdinaryRequest` no longer flips the flag, so `seeded` stays a constructor fact for the session's lifetime. The bridge gains `ensureResume(sessionId, model)`, called by `AgentHintAdapter.stream()` for an ordinary request (no defined `purpose`) before the existing pending-op barrier. The method sends `resume` once per restore cycle — gated on `(seeded || pauseSent) && !resumeSent` — using the triggering request's model id, then marks the session resumed so concurrent or later requests do not duplicate it. The `pauseSent` arm covers a paused session returning to the foreground (its KV was offloaded by `pause`), including a submit without any composer draft; the `seeded` arm covers sessions created with prior history. A live fresh session never triggers it, because neither flag is set between its consecutive ordinary requests. Background-purpose requests still do not trigger a resume, and the ordinary request still waits for the in-flight resume through the existing barrier.
 
 `compact` and `stop` behavior is unchanged. The change is local to `@deepseek-ai/dsh-llm-agent-hint`.
 
@@ -25,6 +25,8 @@ English | [中文](2026-08-29-defer-agent-hint-resume-until-first-request.zh.md)
 
 - Startup restoration no longer fans out `resume` manage requests; only the first ordinary request of a seeded session does.
 - A blank persisted session reuses the fresh-session path: its first ordinary request declares `start` and does not send a `resume`.
+- A live fresh session sends no `resume` between its consecutive ordinary requests; `resume` fires only after the session was actually `pause`d or when it was created with prior history.
+- A paused session sends one fresh `resume` on its next ordinary request even when the user submits without composing; the composer-draft path remains an earlier trigger of the same verb.
 - A resumed conversation's first model request waits briefly for its own `resume` through the unchanged pending-op barrier, then proceeds fail-open.
 - The deferred `resume` uses the triggering request's model id rather than the session's last observed model id.
 - `compact` and `stop` continue to use the last observed model id.

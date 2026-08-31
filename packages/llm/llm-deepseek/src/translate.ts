@@ -156,8 +156,10 @@ export async function* translate(payloads: AsyncIterable<string>): AsyncGenerato
           toolBlocks.set(call.index, block)
           yield { type: 'block-start', index: block.index, blockType: 'tool-call' }
         }
-        if (call.id !== undefined) block.callId = call.id
-        if (call.function?.name !== undefined) block.name = call.function.name
+        // Continuation chunks carry JSON null for these fields; null must not
+        // overwrite the values accumulated from the call's first delta.
+        if (typeof call.id === 'string') block.callId = call.id
+        if (typeof call.function?.name === 'string') block.name = call.function.name
         const fragment = call.function?.arguments ?? ''
         block.text += fragment
         yield {

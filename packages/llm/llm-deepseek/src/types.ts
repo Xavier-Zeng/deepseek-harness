@@ -145,12 +145,12 @@ export interface WireDelta {
 export interface WireToolCallDelta {
   /** Disambiguates parallel tool calls; stable across a call's deltas. */
   index: number
-  /** Present on the first delta of each call only. */
-  id?: string
+  /** Present on the first delta of each call only; null on continuation deltas. */
+  id?: string | null
   type?: 'function'
   function?: {
-    /** Present on the first delta of each call only. */
-    name?: string
+    /** Present on the first delta of each call only; null on continuation deltas. */
+    name?: string | null
     /** Argument JSON fragment (concatenate across deltas). */
     arguments?: string
   }

@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-08-29-defer-agent-hint-resume-until-first-request.md
-2026-08-29-defer-agent-hint-resume-until-first-request.md: 7f19757e22994239ec15a9a3f710e02726f9b8c6
-2026-08-29-defer-agent-hint-resume-until-first-request.zh.md: e337b4fbd5d77f841af4eca88fe0046ee38820e5
+2026-08-29-defer-agent-hint-resume-until-first-request.md: 1b25bd8d47c4fb8aa7a958a3d39b291dedf24b4b
+2026-08-29-defer-agent-hint-resume-until-first-request.zh.md: 2666b239ed2ae175729ae93dd6e21527c8677669

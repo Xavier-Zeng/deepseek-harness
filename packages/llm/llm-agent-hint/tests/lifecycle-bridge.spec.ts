@@ -166,6 +166,31 @@ describe('LifecycleBridge', () => {
     expect(calls).toEqual([])
   })
 
+  it('does not send resume between ordinary requests of a live fresh session', () => {
+    const { bridge, calls } = makeBridge()
+    bridge.onSessionCreated(sessionOf())
+    bridge.noteOrdinaryRequest(SID, 'model-a')
+    bridge.ensureResume(SID, 'model-a')
+    bridge.noteOrdinaryRequest(SID, 'model-a')
+    bridge.ensureResume(SID, 'model-a')
+    expect(calls).toEqual([])
+    expect(bridge.facts(SID)).toMatchObject({ seeded: false, firstOrdinarySent: true })
+  })
+
+  it('sends resume for a paused fresh session even without a composer draft', () => {
+    const { bridge, calls } = makeBridge()
+    bridge.onSessionCreated(sessionOf())
+    bridge.noteOrdinaryRequest(SID, 'model-a')
+    bridge.noteOrdinaryRequest(OTHER, 'model-b')
+    expect(calls).toEqual([{ verb: 'pause', sessionId: 'session-1', model: 'model-a' }])
+
+    bridge.ensureResume(SID, 'model-a')
+    expect(calls).toEqual([
+      { verb: 'pause', sessionId: 'session-1', model: 'model-a' },
+      { verb: 'resume', sessionId: 'session-1', model: 'model-a' },
+    ])
+  })
+
   it('marks the previous ordinary session for pause and sends it when it becomes idle', () => {
     const { bridge, calls } = makeBridge()
     bridge.onAgentStatus(SID, 'running')
