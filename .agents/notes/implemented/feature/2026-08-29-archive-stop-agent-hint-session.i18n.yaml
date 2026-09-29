@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-08-29-archive-stop-agent-hint-session.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-29-archive-stop-agent-hint-session.md
+/agent-note-stop-an-archived-agent-hint-session:
+  en: 3db5aea01e5d00be
+  zh: 4a298f4f18dbcba9
+/agent-note-stop-an-archived-agent-hint-session/problem:
+  en: 1d68c5bb21ddaea6
+  zh: 908cda48a4ffbf69
+/agent-note-stop-an-archived-agent-hint-session/decision:
+  en: 076bae9096809b35
+  zh: 5e06d078e7a74a23
+/agent-note-stop-an-archived-agent-hint-session/alternatives-considered:
+  en: fc151a8d98d057ba
+  zh: efbf05419ad0e8fb
+/agent-note-stop-an-archived-agent-hint-session/consequences:
+  en: 4672fe0486cffb42
+  zh: be5f74523dc97c11

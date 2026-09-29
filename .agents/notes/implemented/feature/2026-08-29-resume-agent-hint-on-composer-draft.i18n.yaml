@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-08-29-resume-agent-hint-on-composer-draft.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-29-resume-agent-hint-on-composer-draft.md
+/agent-note-resume-a-paused-agent-hint-session-when-its-composer-draft-starts:
+  en: 3f27a8cd85cf0e3f
+  zh: 3995eb84a580f899
+/agent-note-resume-a-paused-agent-hint-session-when-its-composer-draft-starts/problem:
+  en: 8829d84a8b88a6ca
+  zh: 6a8eae414a242f40
+/agent-note-resume-a-paused-agent-hint-session-when-its-composer-draft-starts/decision:
+  en: 13fd4f4fac83768f
+  zh: cedf9cbd70390e8f
+/agent-note-resume-a-paused-agent-hint-session-when-its-composer-draft-starts/alternatives-considered:
+  en: e577bfa1321356f0
+  zh: 83344a47ae7d1b1e
+/agent-note-resume-a-paused-agent-hint-session-when-its-composer-draft-starts/consequences:
+  en: 30bc2d50e94a48bb
+  zh: 7b3a11df6b113cf2

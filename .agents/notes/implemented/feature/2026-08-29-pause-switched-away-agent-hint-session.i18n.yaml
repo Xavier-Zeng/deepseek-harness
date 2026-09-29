@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-08-29-pause-switched-away-agent-hint-session.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-29-pause-switched-away-agent-hint-session.md
+/agent-note-pause-a-switched-away-agent-hint-session-after-it-idles:
+  en: c9cc3c2582ce9ea4
+  zh: df467a802cf42612
+/agent-note-pause-a-switched-away-agent-hint-session-after-it-idles/problem:
+  en: 21b3b0c4b065d509
+  zh: 3d69afd92fdd85dd
+/agent-note-pause-a-switched-away-agent-hint-session-after-it-idles/decision:
+  en: 9d11994ce746d353
+  zh: e21223225943c3fe
+/agent-note-pause-a-switched-away-agent-hint-session-after-it-idles/alternatives-considered:
+  en: 689f2064aa75b085
+  zh: 1adc47f8c294785b
+/agent-note-pause-a-switched-away-agent-hint-session-after-it-idles/consequences:
+  en: 12c8159a29403c86
+  zh: b35abb52da344cca

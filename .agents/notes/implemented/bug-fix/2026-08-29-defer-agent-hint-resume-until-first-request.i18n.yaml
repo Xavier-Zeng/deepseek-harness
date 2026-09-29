@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-08-29-defer-agent-hint-resume-until-first-request.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-08-29-defer-agent-hint-resume-until-first-request.md
+/agent-note-defer-agent-hint-resume-until-first-ordinary-request:
+  en: 34226df3a5e91e5e
+  zh: dd6bf48c89addfc2
+/agent-note-defer-agent-hint-resume-until-first-ordinary-request/problem:
+  en: e3f5b4237f21b71e
+  zh: 8f22749552252419
+/agent-note-defer-agent-hint-resume-until-first-ordinary-request/decision:
+  en: f962f704c7faa25e
+  zh: 2aff45b17a278657
+/agent-note-defer-agent-hint-resume-until-first-ordinary-request/alternatives-considered:
+  en: c8ec39ed88ec6ccd
+  zh: f0a1d31da9a8258a
+/agent-note-defer-agent-hint-resume-until-first-ordinary-request/consequences:
+  en: 491eb49c32a95ff5
+  zh: 591710c13c9f8300
