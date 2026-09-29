@@ -47,6 +47,7 @@ import type {
   SessionFollowRequest,
   SessionListRequest,
   SessionListValue,
+  SessionNoteComposingRequest,
   SessionOpenWorkspacePathRequest,
   SessionOpenWorkspacePathValue,
   SessionWorkspacePathApplication,
@@ -77,6 +78,7 @@ export interface TestSessionRemote {
   selectModel(request: SessionSelectModelRequest): Promise<RemoteResult<SessionSelectModelValue>>
   modelCatalog(): Promise<RemoteResult<ModelCatalog>>
   rename(request: SessionRenameRequest): Promise<RemoteResult<SessionRenameValue>>
+  noteComposing(request: SessionNoteComposingRequest): Promise<RemoteResult<void>>
   fork(request: SessionForkRequest): Promise<RemoteResult<SessionForkValue>>
   prompt(request: SessionPromptRequest, signal?: AbortSignal): Promise<RemoteResult<SessionPromptValue>>
   attachment(request: SessionAttachmentRequest): Promise<RemoteResult<SessionAttachmentValue>>
@@ -363,6 +365,7 @@ export function createSessionTestRemote(
     selectModel: request => remoteResult(() => direct.selectModel(request)),
     modelCatalog: () => remoteResult(() => direct.modelCatalog()),
     rename: request => remoteResult(() => direct.rename(request)),
+    noteComposing: request => remoteResult(() => { direct.noteComposing(request) }),
     fork: request => remoteResult(() => direct.fork(request)),
     prompt: (request, signal = new AbortController().signal) => remoteResult(
       () => direct.prompt(request, signal),

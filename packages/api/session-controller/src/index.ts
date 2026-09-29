@@ -44,6 +44,7 @@ import type {
   SessionForkValue,
   SessionListRequest,
   SessionListValue,
+  SessionNoteComposingRequest,
   SessionOpenWorkspacePathRequest,
   SessionOpenWorkspacePathValue,
   SessionPage,
@@ -402,6 +403,18 @@ export class SessionController extends TypertRemoteService {
   @Remote('rename')
   rename(request: SessionRenameRequest): Promise<SessionRenameValue> {
     return this.commands.rename(request)
+  }
+
+  /**
+   * Note that a Session's composer draft became non-empty. Advisory only: the
+   * Host emits `session/composing` for control-plane listeners and never
+   * resumes or publishes an Agent from it; an unknown Session is accepted
+   * silently.
+   * @param request - Session whose composer became active.
+   */
+  @Remote('noteComposing')
+  noteComposing(request: SessionNoteComposingRequest): void {
+    this.ctx.emit('session/composing', request.sessionId)
   }
 
   /**

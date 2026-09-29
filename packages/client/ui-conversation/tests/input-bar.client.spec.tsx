@@ -87,6 +87,8 @@ interface BenchOptions {
   nextStep?: InboxState['next-step']
   /** The hub's steer-all face (empty-draft accelerated Enter). */
   steerQueue?: () => void
+  /** Composing notification spy (user edits only; programmatic writes never fire it). */
+  onComposing?: () => void
   variant?: 'hero' | 'composer'
   placeholder?: string
   t?: InputBarProps['t']
@@ -133,6 +135,7 @@ function bench(over?: BenchOptions) {
   const shell = new SessionInputShell({
     actx: SCTX,
     defaultSink: sink,
+    ...(over?.onComposing !== undefined ? { onComposing: over.onComposing } : {}),
     commandAttachments: { serialize: () => Promise.resolve([]), release: () => {}, unsupportedNotice: (token: string) => `${token.trim()} attachments-unsupported` },
     inbox: createSnapshotStore<InboxState>({
       'next-turn': over?.queue ?? [],
@@ -335,6 +338,50 @@ describe('composer placeholder visibility', () => {
     expect(view.container.querySelector('[data-composer-placeholder]')).toBeNull()
     writeDraft(shell, '')
     expect(view.container.querySelector('[data-composer-placeholder]')).not.toBeNull()
+  })
+})
+
+describe('composing notification', () => {
+  /** Type at the draft's end through a real editor update (the user-edit path). */
+  function type(shell: SessionInputShell, text: string): void {
+    act(() => {
+      shell.editor.update(() => {
+        const last = $getRoot().getAllTextNodes().at(-1)
+        if (last === undefined) $getRoot().selectStart().insertText(text)
+        else last.select(last.getTextContentSize(), last.getTextContentSize()).insertText(text)
+      }, { discrete: true })
+    })
+  }
+
+  it('fires once when a user edit moves the draft from empty to non-empty', () => {
+    const onComposing = vi.fn()
+    const { shell } = bench({ onComposing })
+    type(shell, 'h')
+    type(shell, 'e')
+    expect(shell.snapshot.draft).toBe('he')
+    expect(onComposing).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not fire for programmatic draft writes', () => {
+    const onComposing = vi.fn()
+    const { shell } = bench({ onComposing })
+    writeDraft(shell, 'restored draft')
+    expect(onComposing).not.toHaveBeenCalled()
+  })
+
+  it('fires again after the user clears the draft and retypes', () => {
+    const onComposing = vi.fn()
+    const { shell } = bench({ onComposing })
+    type(shell, 'h')
+    act(() => {
+      shell.editor.update(() => {
+        const first = $getRoot().getAllTextNodes()[0]
+        if ($isTextNode(first)) first.select(0, first.getTextContentSize()).removeText()
+      }, { discrete: true })
+    })
+    expect(shell.snapshot.draft).toBe('')
+    type(shell, 'x')
+    expect(onComposing).toHaveBeenCalledTimes(2)
   })
 })
 

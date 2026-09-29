@@ -16,6 +16,18 @@ const defaults = {
 }
 
 describe('SessionController facade', () => {
+  it('emits session/composing from noteComposing without resolving an Agent', () => {
+    const ctx = new Context()
+    const controller = createSessionTestController(ctx, defaults)
+    const composing = vi.fn()
+    ctx.on('session/composing', composing)
+
+    controller.noteComposing({ sessionId: SessionId('cold-composing') })
+
+    expect(composing).toHaveBeenCalledOnce()
+    expect(composing).toHaveBeenCalledWith(SessionId('cold-composing'))
+  })
+
   it('does not require the Tools service', () => {
     expect(SessionController.inject).not.toContain('tools')
   })

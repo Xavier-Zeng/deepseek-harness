@@ -712,6 +712,16 @@ describe('prompt and cancel errors', () => {
   })
 })
 
+describe('noteComposing', () => {
+  it('sends the composing note fire-and-forget with the session identity', async ({ mock, start }) => {
+    const session = await sessionBench(mock, start, SID)
+    session.noteComposing()
+    await vi.waitFor(() => {
+      expect(mock.log.requests('session/noteComposing')).toMatchObject([{ sessionId: SID }])
+    })
+  })
+})
+
 describe('rename', () => {
   it('settles the title projection cell from the unary response (higher-seq-wins vs the push frame)', async ({ mock, start }) => {
     const session = await sessionBench(mock, start, SID)

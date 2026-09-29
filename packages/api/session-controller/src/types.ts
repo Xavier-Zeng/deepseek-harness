@@ -317,6 +317,11 @@ export interface SessionRenameValue {
   readonly seq: number
 }
 
+/** Composer-activity notification for one Session. */
+export interface SessionNoteComposingRequest {
+  readonly sessionId: SessionId
+}
+
 /** Session fork request. */
 export interface SessionForkRequest {
   readonly sessionId: SessionId

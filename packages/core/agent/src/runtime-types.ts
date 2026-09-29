@@ -10,7 +10,7 @@ import type { Scoped } from '@deepseek-ai/dsh-scope'
 import type {
   LlmAttemptId, LlmCallConfig, LlmFailure, MessageId, ReasoningEffortId, ResolvedRetryPolicy, StreamChunk,
 } from '@deepseek-ai/dsh-llm'
-import type { AgentCancelCause, Session, SessionSeq, UserMessage } from '@deepseek-ai/dsh-session'
+import type { AgentCancelCause, Session, SessionId, SessionSeq, UserMessage } from '@deepseek-ai/dsh-session'
 export type { AgentCancelCause } from '@deepseek-ai/dsh-session'
 import type { Agent, InboxTarget } from './types.ts'
 export type { Agent } from './types.ts'
@@ -305,6 +305,13 @@ declare module '@deepseek-ai/cordis' {
      * @mode emit
      */
     'agent/inbox/discarded'(this: Scoped<Agent>, payload: { agent: Agent; message: UserMessage }): void
+    /**
+     * A client reported that a session's composer draft became non-empty.
+     * Advisory only: the Host never resumes or publishes an Agent from it.
+     * @param sessionId - session whose composer became active.
+     * @mode emit
+     */
+    'session/composing'(sessionId: SessionId): void
     // ---- the machine's extension points ----
     /**
      * Reject a proposed step or replace the messages that enter it. Calling

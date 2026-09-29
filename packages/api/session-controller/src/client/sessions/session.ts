@@ -378,6 +378,16 @@ export class Session implements SessionFace {
   }
 
   /**
+   * Report that this session's composer draft became non-empty: contract
+   * session.noteComposing 1:1, fire-and-forget. The result is intentionally
+   * unread — the hint only warms the control plane, and the next edit
+   * re-sends it.
+   */
+  noteComposing(): void {
+    void this.remote.session.noteComposing({ sessionId: this.sessionId })
+  }
+
+  /**
    * Execute one slash-command line against this session's agent — pure
    * admission semantics (the host executor durably logs the lifecycle;
    * outcomes render as flow nodes, never as a response echo).

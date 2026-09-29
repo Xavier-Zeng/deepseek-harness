@@ -45,6 +45,12 @@ export interface SessionInputDeps {
   submissionState?: () => MessageSubmissionState
   /** Notify one ordinary message attempt before reference serialization. */
   messageSubmitted?: (submission: MessageSubmission) => void
+  /**
+   * Notify that a user edit turned the empty draft non-empty. Programmatic
+   * writes (draft seeds, workspace switches, failure restoration) never fire
+   * it; absent = the notification is dropped.
+   */
+  onComposing?: (() => void) | undefined
   /** Enter adjudication face resolver; absent/undefined answer = every '/' line falls to the default sink. */
   inputTriggers?: (() => InputTriggerController | undefined) | undefined
   /** PopupSelect shell face resolver (dismissal on submit lock / escape). */
@@ -156,6 +162,8 @@ export class SessionInputShell implements SessionInput {
   /** Revision of the last automatic failure restoration. */
   private failedRestoreRev: number | undefined
   private restoringFailures = false
+  /** Depth of programmatic draft writes (setDraft); their updates never report composing. */
+  private programmaticDraft = 0
   private attachmentFlightSeq = 0
   /** Attachment-only sends retained until admission settles or scope disposal releases their attachments. */
   private readonly attachmentFlights = new Map<number, {
@@ -195,6 +203,12 @@ export class SessionInputShell implements SessionInput {
         this.failedRestoreRev = undefined
       }
       this.dispatchRun(({ type: 'draft-changed', draft: this.projection.clipboardText }))
+      if (
+        prev.clipboardText === '' && this.projection.clipboardText !== ''
+        && this.programmaticDraft === 0 && !this.restoringFailures
+      ) {
+        this.deps.onComposing?.()
+      }
     }
     const caret = this.projection.caret
     if (caret !== null) {
@@ -213,7 +227,12 @@ export class SessionInputShell implements SessionInput {
    * @param text - the full next draft.
    */
   setDraft(text: string): void {
-    this.draftEditor.setDraft(text)
+    this.programmaticDraft += 1
+    try {
+      this.draftEditor.setDraft(text)
+    } finally {
+      this.programmaticDraft -= 1
+    }
   }
 
   /** Append ordered attachment ids unless an admission transaction is locked. */

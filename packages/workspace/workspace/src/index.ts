@@ -145,6 +145,13 @@ declare module '@deepseek-ai/cordis' {
      * @mode parallel
      */
     'workspace/session-stop'(request: SessionActivityRequest): Promise<void> | void
+    /**
+     * A session became hidden from every workspace grouping surface. Emitted
+     * after the archive set is durable, once per session and archive.
+     * @param sessionId - the session just archived.
+     * @mode emit
+     */
+    'workspace/session-archived'(sessionId: SessionId): void
   }
 }
 
@@ -380,6 +387,7 @@ export class WorkspaceRegistry extends Service {
         archivedSessionIds: [...state.archivedSessionIds, sessionId],
         pinnedSessionIds: state.pinnedSessionIds.filter(id => id !== sessionId),
       })
+      this.ctx.emit('workspace/session-archived', sessionId)
       if (options.stopActivity === true) await this.stopSessionActivity(sessionId)
     })
   }

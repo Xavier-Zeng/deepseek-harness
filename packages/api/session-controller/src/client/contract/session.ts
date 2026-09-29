@@ -119,6 +119,13 @@ export interface ISession {
    */
   rename(title: string): Promise<RemoteResult<{ title: string; seq: SessionSeq }>>
   /**
+   * Report that this session's composer draft became non-empty. Advisory
+   * fire-and-forget: the result is intentionally unread (the hint only warms
+   * the control plane, and the next edit re-sends it), so transport failures
+   * are swallowed by the Remote layer.
+   */
+  noteComposing(): void
+  /**
    * Extend history by at least 50 messages and two Turn starts, including a
    * partial Turn at the window's beginning. Stop at 500 messages or history
    * exhaustion even when those minima cannot be met. Publish one prepend.
