@@ -1988,6 +1988,11 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'the accepted title and durable event sequence.',
       },
       {
+        signature: '@Remote(\'noteComposing\') noteComposing(request: SessionNoteComposingRequest): void',
+        description: 'Note that a Session\'s composer draft became non-empty. Advisory only: the Host emits `session/composing` for control-plane listeners and never resumes or publishes an Agent from it; an unknown Session is accepted silently.',
+        parameters: [{ name: 'request', description: 'Session whose composer became active.' }],
+      },
+      {
         signature: '@Remote(\'fork\') fork(request: SessionForkRequest): Promise<SessionForkValue>',
         description: 'Fork one cold-readable exact event prefix into a new Session. An omitted boundary selects the latest completed-turn prefix; an open cut receives synthetic fork closers.',
         parameters: [{ name: 'request', description: 'source Session and optional exact inclusive event boundary.' }],
@@ -4156,6 +4161,14 @@ export const EVENT_API: readonly EventApiEntry[] = [
     parameters: [{ name: 'record', description: 'the candidate record, already the coordinator\'s own deep copy; listeners return a (possibly new) record and must not mutate it.' }],
   },
   {
+    name: 'session/composing',
+    mode: 'emit',
+    signature: '\'session/composing\'(sessionId: SessionId): void',
+    summary: 'A client reported that a session\'s composer draft became non-empty.',
+    description: 'A client reported that a session\'s composer draft became non-empty. Advisory only: the Host never resumes or publishes an Agent from it.',
+    parameters: [{ name: 'sessionId', description: 'session whose composer became active.' }],
+  },
+  {
     name: 'session/created',
     mode: 'emit',
     signature: '\'session/created\'(this: Scoped<Session>, session: Session): void',
@@ -4370,6 +4383,14 @@ export const EVENT_API: readonly EventApiEntry[] = [
     summary: 'Ask the composed providers what still runs for a session before it is archived.',
     description: 'Ask the composed providers what still runs for a session before it is archived. A listener prepends its own SessionActivity entries to the result of `next()`; the registry\'s innermost callback returns an empty list, so a composition without providers archives freely. Any non-empty result refuses the archive without a write.',
     parameters: [{ name: 'request', description: 'the session about to be archived.' }, { name: 'next', description: 'delegate to the remaining providers.' }],
+  },
+  {
+    name: 'workspace/session-archived',
+    mode: 'emit',
+    signature: '\'workspace/session-archived\'(sessionId: SessionId): void',
+    summary: 'A session became hidden from every workspace grouping surface.',
+    description: 'A session became hidden from every workspace grouping surface. Emitted after the archive set is durable, once per session and archive.',
+    parameters: [{ name: 'sessionId', description: 'the session just archived.' }],
   },
   {
     name: 'workspace/session-stop',
@@ -6658,6 +6679,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'SessionMessageProjectionContext',
     declaration: 'export interface SessionMessageProjectionContext {\n    nodes: readonly SessionSeq[];\n    events: readonly SessionEvent[];\n    baseSeq: SessionLogOffset;\n    messages: ReadonlyMap<SessionSeq, Message>;\n}',
+  },
+  {
+    name: 'SessionNoteComposingRequest',
+    declaration: 'export interface SessionNoteComposingRequest {\n    readonly sessionId: SessionId;\n}',
   },
   {
     name: 'SessionObservation',

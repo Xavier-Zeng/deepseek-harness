@@ -397,6 +397,7 @@ export const LINK_MAP: Readonly<Record<string, string>> = {
   OptionalSessionSeq: 'session.md',
   SessionListRequest: 'session.md',
   SessionListValue: 'session.md',
+  SessionNoteComposingRequest: 'session.md',
   ModelCatalog: 'session.md',
   SessionOpenWorkspacePathRequest: 'session.md',
   SessionOpenWorkspacePathValue: 'session.md',

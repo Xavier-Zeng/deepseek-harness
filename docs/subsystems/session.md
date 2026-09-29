@@ -876,6 +876,15 @@ workspaceDesktop(): { name: string; available: boolean; fileManager: 'finder' | 
 @Remote('rename') rename(request: SessionRenameRequest): Promise<SessionRenameValue>
 
 /**
+ * Note that a Session's composer draft became non-empty. Advisory only: the
+ * Host emits `session/composing` for control-plane listeners and never
+ * resumes or publishes an Agent from it; an unknown Session is accepted
+ * silently.
+ * @param request - Session whose composer became active.
+ */
+@Remote('noteComposing') noteComposing(request: SessionNoteComposingRequest): void
+
+/**
  * Fork one cold-readable exact event prefix into a new Session. An omitted
  * boundary selects the latest completed-turn prefix; an open cut receives
  * synthetic fork closers.
@@ -1200,6 +1209,26 @@ Source: [`packages/api/session-controller/src/types.ts`](../../packages/api/sess
 <a id="session-events"></a>
 
 ### `session/*` events
+
+<a id="sessioncomposing--emit"></a>
+
+#### `session/composing` — emit
+
+A client reported that a session's composer draft became non-empty. Advisory only: the Host never resumes or publishes an Agent from it.
+
+```ts cordis-catalog
+/**
+ * A client reported that a session's composer draft became non-empty.
+ * Advisory only: the Host never resumes or publishes an Agent from it.
+ * @param sessionId - session whose composer became active.
+ * @mode emit
+ */
+'session/composing'(sessionId: SessionId): void
+```
+
+Types: [SessionId](core.md)
+
+Source: [`packages/core/agent/src/runtime-types.ts`](../../packages/core/agent/src/runtime-types.ts)
 
 <a id="sessioncreated--emit"></a>
 

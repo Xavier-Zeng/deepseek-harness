@@ -631,6 +631,26 @@ Ask the composed providers what still runs for a session before it is archived. 
 
 Source: [`packages/workspace/workspace/src/index.ts`](../../packages/workspace/workspace/src/index.ts)
 
+<a id="workspacesession-archived--emit"></a>
+
+#### `workspace/session-archived` — emit
+
+A session became hidden from every workspace grouping surface. Emitted after the archive set is durable, once per session and archive.
+
+```ts cordis-catalog
+/**
+ * A session became hidden from every workspace grouping surface. Emitted
+ * after the archive set is durable, once per session and archive.
+ * @param sessionId - the session just archived.
+ * @mode emit
+ */
+'workspace/session-archived'(sessionId: SessionId): void
+```
+
+Types: [SessionId](core.zh.md)
+
+Source: [`packages/workspace/workspace/src/index.ts`](../../packages/workspace/workspace/src/index.ts)
+
 <a id="workspacesession-stop--parallel"></a>
 
 #### `workspace/session-stop` — parallel
