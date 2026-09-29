@@ -1,0 +1,37 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/llm/llm-agent-hint/README.md
+/:
+  en: 72e19761f1e2a5d3
+  zh: 72e19761f1e2a5d3
+/deepseek-ai-dsh-llm-agent-hint:
+  en: 36979f800dd11299
+  zh: 430c8693163cc30d
+/deepseek-ai-dsh-llm-agent-hint/summary:
+  en: aae6c2ce31033407
+  zh: fda70c079fd0b0df
+/deepseek-ai-dsh-llm-agent-hint/table-of-contents:
+  en: 23386452a66b2fbd
+  zh: e16bae6c63976f89
+/deepseek-ai-dsh-llm-agent-hint/use-this-package:
+  en: b5aff726d390ef34
+  zh: 494faa81c81134aa
+/deepseek-ai-dsh-llm-agent-hint/understand-the-implementation:
+  en: 7cf82cf42763436e
+  zh: 1450cb1f9e461c66
+/deepseek-ai-dsh-llm-agent-hint/further-exploration:
+  en: 13dad40d0e31814f
+  zh: 00aab8852db0d893
+/deepseek-ai-dsh-llm-agent-hint/model-experience:
+  en: 1a4d42fc8e73d40e
+  zh: d445c205dea14c22
+/deepseek-ai-dsh-llm-agent-hint/model-experience/kv-cache-effect:
+  en: b1c83f53e5638829
+  zh: 3c5d7420b2b6d6ee
+/deepseek-ai-dsh-llm-agent-hint/known-limitations-and-deferred-work:
+  en: bb2fc1aadc9c05cd
+  zh: ba91bcf16d252584
+/deepseek-ai-dsh-llm-agent-hint/dev-note:
+  en: da5d08a4a01cadcf
+  zh: 8f64bd26a329e6e9

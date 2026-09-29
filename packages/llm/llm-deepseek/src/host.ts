@@ -13,11 +13,13 @@ import type { DeepSeekAdapterOptions, DeepSeekConnectionOptions } from './types.
  * Register one provider with request-local transport services and live retry policy.
  * @param ctx - provider plugin lifetime with the LLM registry injected.
  * @param provider - exact route owned by this plugin.
- * @param dependencies - provider-owned discovery, credential, and configuration callbacks.
+ * @param dependencies - provider-owned discovery, credential, and configuration callbacks;
+ *   an optional `prepareExtensions` replaces the default global extension-registry chain.
  */
 export function registerDeepSeekProvider<C extends DeepSeekConnectionOptions>(
   ctx: Context, provider: string, dependencies: Pick<DeepSeekAdapterOptions<C>,
-  'options' | 'resolveAuth' | 'providerName' | 'discoverModels'>): void {
+  'options' | 'resolveAuth' | 'providerName' | 'discoverModels'>
+  & Partial<Pick<DeepSeekAdapterOptions<C>, 'prepareExtensions'>>): void {
   ctx.inject(['settings'], (child) => { child.effect(() => child.settings.configure({ auto: false }, ctx.fiber)) })
   let userId: AnonymousUserId | undefined
   const adapter = new DeepSeekAdapter({
@@ -33,8 +35,8 @@ export function registerDeepSeekProvider<C extends DeepSeekConnectionOptions>(
     resolveImageAccess: (attachments, ref) => resolveImageAttachmentAccess(
       attachments, hostPath => ctx.get('fs')?.processPathFromHostPath(hostPath), ref,
     ),
-    prepareExtensions: request => ctx.get('deepseekLlmApiExtensions')?.prepare(request)
-      ?? Promise.resolve({ fields: {}, accept: () => Promise.resolve() }),
+    prepareExtensions: dependencies.prepareExtensions ?? (request => ctx.get('deepseekLlmApiExtensions')?.prepare(request)
+      ?? Promise.resolve({ fields: {}, accept: () => Promise.resolve() })),
   })
   const registration = ctx.llm.registerAdapter([provider], adapter)
   let registeredPolicy = dependencies.options().retryPolicy
