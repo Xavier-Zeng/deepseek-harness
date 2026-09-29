@@ -9,9 +9,9 @@ kind: "package-reference"
 
 ## 概述
 
-注册 `deepseek-agent-hint` 提供方路由：面向 MindIE-Motor coordinator 的 [Messages 传输](../llm-deepseek/README.zh.md)，其普通请求携带 coordinator 的 `agent_hint` 字段，并由 harness 会话生命周期事件驱动独立的 `session_control` 管理请求。本包为可选（opt-in）——它拥有自己的路由，绝不触碰 `deepseek-official`。
+注册 `deepseek-agent-hint` 提供方路由：面向 MindIE-Motor coordinator 的 [Messages 传输](../llm-deepseek/README.zh.md)。普通请求携带 coordinator 的 `agent_hint` 字段；harness 会话生命周期事件驱动独立的 `session_control` 管理请求。本包为可选（opt-in）——它拥有自己的路由，绝不触碰 `deepseek-official`。
 
-一个插件承载两个平面。**数据面**是路由级的 `prepareExtensions`：`buildAgentHint` 逐请求判定 wire 请求体是否携带 `session_id`（外加 fork 谱系与静态缓存策略），以及新会话的首个普通请求是否声明 `session_control: start`；`start` 记账仅在端点接受该请求后提交。**控制面**是生命周期桥：带历史会话的首个普通请求（或编辑器草稿）请求 `resume` 预取；成功的 `compaction/end` 请求 `compact`；`session/disposed` 与 `workspace/session-archived` 请求 `stop`；前台会话切走时，待前一个会话进入空闲后请求 `pause`。管理请求是建议性的并失败开放（fail-open）：失败仅记录警告，绝不拒绝触发它的 harness 工作。
+一个插件承载两个平面。**数据面**是路由级的 `prepareExtensions`，负责附加 `session_id`、fork 谱系、缓存策略与新会话的 `start` 声明。**控制面**把生命周期事件映射为建议性的 `resume` / `pause` / `compact` / `stop` 管理请求，并失败开放（fail-open）。
 
 ## 目录
 
@@ -20,7 +20,7 @@ kind: "package-reference"
 - [延伸阅读](#further-exploration)
 - [模型体验](#model-experience)
 - [已知限制与暂缓工作](#known-limitations-and-deferred-work)
-- [开发说明](#dev-note)
+- [开发备注](#dev-note)
 
 <a id="use-this-package"></a>
 ## 使用本包
@@ -78,14 +78,23 @@ kind: "package-reference"
 <a id="model-experience"></a>
 ## 模型体验
 
-无：本插件把模型不可见的传输元数据加盖到已组装完成的请求上，不注册任何自己的提示词、schema 或消息。
+### agent-hint 传输元数据
 
-#### KV 缓存影响
+#### What the model sees
 
-注入的 `agent_hint` 位于模型可见内容之外，未变化的会话前缀与底层 Messages 传输所报告的完全一致地保持 coordinator KV 缓存复用资格。会话身份变更（fork、压缩续接）或控制动词会选择不同的服务端缓存域；coordinator 侧的逐出与 TTL 不在本包范围内。
+`deepseek-agent-hint` 上的请求不包含本插件添加的模型可见文本；请求由共享 Messages 传输序列化，`agent_hint` 位于模型可见内容之外。后台用途调用完全不携带 hint。
+
+#### Token effect
+
+hint 注入与管理请求不增加输入 token；实际用量由所选模型与请求内容决定。
+
+#### KV Cache effect
+
+未变化的会话前缀与底层 Messages 传输所报告的完全一致地保持 coordinator KV 缓存复用资格。会话身份变更（fork、压缩续接）或控制动词会选择不同的服务端缓存域；coordinator 侧的逐出与 TTL 不在本包范围内。
+
+## 已知限制与暂缓工作
 
 <a id="known-limitations-and-deferred-work"></a>
-## 已知限制与暂缓工作
 
 - 在 coordinator 的 V1 设计下，管理请求仍有一次极小的生成开销——空 messages 请求会走聊天管线；以 `max_tokens: 1` 封顶在 coordinator 侧成本问题显现前暂缓。
 - 基于定时器的空闲 `pause` 暂缓——`pause` 现在于前台会话从已运行过轮次的会话切走、且该会话进入空闲后触发；空闲定时器策略尚未定义。
@@ -93,6 +102,6 @@ kind: "package-reference"
 - 控制面的模型 id 是部署事实——id 不匹配时以警告失败开放，无缓存效果。
 
 <a id="dev-note"></a>
-## 开发说明
+### 开发备注
 
 单元测试覆盖 hint 纳入规则、生命周期路由、控制面 wire 与扩展缝（屏障时序、注入、accept 时记账）；共享传输行为由 `llm-deepseek` 的测试覆盖。

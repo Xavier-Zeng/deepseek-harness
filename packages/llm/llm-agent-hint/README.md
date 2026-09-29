@@ -9,9 +9,9 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Register the `deepseek-agent-hint` provider route: the [Messages transport](../llm-deepseek/README.md) aimed at a MindIE-Motor coordinator, whose ordinary requests carry the coordinator's `agent_hint` field and whose harness session lifecycle events drive standalone `session_control` manage requests. The package is opt-in — it owns its own route and never touches `deepseek-official`.
+Register the `deepseek-agent-hint` provider route: the [Messages transport](../llm-deepseek/README.md) aimed at a MindIE-Motor coordinator. Ordinary requests carry the coordinator's `agent_hint` field; harness session lifecycle events drive standalone `session_control` manage requests. The package is opt-in — it owns its own route and never touches `deepseek-official`.
 
-Two planes ship in one plugin. The **data plane** is a route-scoped `prepareExtensions`: `buildAgentHint` decides per request whether the wire body carries `session_id` (plus fork lineage and a static cache policy) and whether the first ordinary request of a fresh session declares `session_control: start`; the `start` bookkeeping commits only after the endpoint accepts the request. The **control plane** is a lifecycle bridge: a seeded session's first ordinary request (or composer draft) requests a `resume` prefetch, a successful `compaction/end` requests a `compact`, `session/disposed` and `workspace/session-archived` request a `stop`, and moving the foreground session away requests a `pause` once the previous session reaches idle. Control requests are advisory and fail open: a failure logs a warning and never rejects the harness work that triggered it.
+Two planes ship in one plugin. The **data plane** is a route-scoped `prepareExtensions` that attaches `session_id`, fork lineage, cache policy, and the fresh-session `start` declaration. The **control plane** maps lifecycle events to advisory `resume` / `pause` / `compact` / `stop` manage requests that fail open.
 
 ## Table of Contents
 
@@ -78,14 +78,23 @@ The data plane composes with the shared transport through `DeepSeekAdapterOption
 <a id="model-experience"></a>
 ## Model Experience
 
-None: the plugin stamps model-hidden transport metadata onto already-assembled requests and registers no prompt, schema, or message of its own.
+### Agent-hint transport metadata
+
+#### What the model sees
+
+Requests on `deepseek-agent-hint` add no model-visible text from this plugin; the shared Messages transport serializes requests, and `agent_hint` rides outside model-visible content. Background-purpose calls carry no hint at all.
+
+#### Token effect
+
+Hint injection and manage requests add no input tokens; the selected model and request content determine actual usage.
 
 #### KV Cache effect
 
-The injected `agent_hint` rides outside model-visible content, and an unchanged session prefix stays eligible for the coordinator's KV-cache reuse exactly as the underlying Messages transport reports it. A session-identity change (fork, compaction continuation) or a control verb selects a different server-side cache domain; coordinator-side eviction and TTL remain outside this package.
+An unchanged session prefix stays eligible for the coordinator's KV-cache reuse exactly as the underlying Messages transport reports it. A session-identity change (fork, compaction continuation) or a control verb selects a different server-side cache domain; coordinator-side eviction and TTL remain outside this package.
+
+## Known Limitations and Deferred Work
 
 <a id="known-limitations-and-deferred-work"></a>
-## Known Limitations and Deferred Work
 
 - Manage requests still cost a tiny generation under the coordinator's V1 design — the empty-messages request runs the chat pipeline; capping with `max_tokens: 1` is deferred until a coordinator-side cost concern materializes.
 - Timer-based idle `pause` is deferred — `pause` fires when the foreground session changes away from a session that already ran a turn, after that session reaches idle; an idle-timer policy is not defined yet.
@@ -93,6 +102,6 @@ The injected `agent_hint` rides outside model-visible content, and an unchanged 
 - Control-plane model ids are deployment facts — a mismatched id fails open with a warning and no cache effect.
 
 <a id="dev-note"></a>
-## Dev Note
+### Dev Note
 
 Unit specs cover the hint inclusion rules, the lifecycle routing, the control wire, and the extension seam (barrier ordering, injection, accept-time bookkeeping); shared transport behavior is covered by the `llm-deepseek` specs.

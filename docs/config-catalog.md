@@ -222,7 +222,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-api-session-controller`
 
 - `inject`: `agentDefaultModel` · `agents` · `attachments` · `fileUploads` · `fs` · `llm` · `sessions` · `sessionProjections` · `sessionQuery` · `typert` · `workspaceRegistry`
-- `source`: [`packages/api/session-controller/src/index.ts:79`](../packages/api/session-controller/src/index.ts)
+- `source`: [`packages/api/session-controller/src/index.ts:80`](../packages/api/session-controller/src/index.ts)
 
 ```ts config-catalog
 /** Session Controller deployment policy. */
@@ -1559,6 +1559,60 @@ export interface Config {
 }
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-jobs-local -->
+
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-llm-agent-hint -->
+<a id="deepseek-aidsh-llm-agent-hint"></a>
+
+## `@deepseek-ai/dsh-llm-agent-hint`
+
+- `inject`: `llm`
+- `refs`: [`DeepSeekLlmApiJson`](../packages/llm/deepseek-llm-api-extensions/src/index.ts) · [`ProtocolConfig`](../packages/llm/llm-deepseek/src/index.ts) · `Volatile` (`@deepseek-ai/cordis`)
+- `source`: [`packages/llm/llm-agent-hint/src/config.ts:45`](../packages/llm/llm-agent-hint/src/config.ts)
+
+```ts config-catalog
+/** Messages configuration for the agent-hint route, with a per-request credential reference. */
+export interface Config extends ProtocolConfig {
+  /** Credential reference resolved per request; defaults to MOTOR_API_KEY. */
+  apiKeyEnv: Volatile<string>
+  /** Provider route id; read at plugin load (changing it requires a reload). */
+  provider: string
+  /** The two `agent_hint` planes. */
+  agentHint?: AgentHintConfig | undefined
+}
+
+/** The two `agent_hint` planes: static hint injection and lifecycle control. */
+export interface AgentHintConfig {
+  /** Master switch for `agent_hint` injection; `false` degrades to plain Messages transport. */
+  enabled: boolean
+  /** Static coordinator cache policy copied verbatim into every hint. */
+  cacheControl?: AgentHintCacheControl | undefined
+  /** Session lifecycle control plane. */
+  sessionControl: SessionControlConfig
+}
+
+/** Coordinator-side cache policy hint, passed through verbatim. */
+export interface AgentHintCacheControl {
+  /** Policy type discriminator the coordinator dispatches on (e.g. `default`). */
+  type: string
+  /** Additional policy fields, passed through verbatim. */
+  [key: string]: DeepSeekLlmApiJson
+}
+
+/** Session lifecycle control plane configuration. */
+export interface SessionControlConfig {
+  /** `false` disables manage requests; the static data plane keeps working. */
+  enabled: boolean
+  /** Full manage-request URL; omission derives `<baseURL>/v1/chat/completions`. */
+  endpoint?: string | undefined
+  /** Cap on how long an ordinary request waits for an in-flight verb. */
+  pendingOpAwaitMs: number
+  /** Per-attempt control-request timeout in milliseconds. */
+  controlTimeoutMs: number
+  /** Transport-level retries after the first failed attempt. */
+  retries: number
+}
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-llm-agent-hint -->
 
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-llm-deepseek-account -->
 <a id="deepseek-aidsh-llm-deepseek-account"></a>

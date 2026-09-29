@@ -9,11 +9,11 @@
   en: 36979f800dd11299
   zh: 430c8693163cc30d
 /deepseek-ai-dsh-llm-agent-hint/summary:
-  en: aae6c2ce31033407
-  zh: fda70c079fd0b0df
+  en: 15f35f24424134d9
+  zh: 8d78cf521a24cde9
 /deepseek-ai-dsh-llm-agent-hint/table-of-contents:
   en: 23386452a66b2fbd
-  zh: e16bae6c63976f89
+  zh: f74783ceac4e13b8
 /deepseek-ai-dsh-llm-agent-hint/use-this-package:
   en: b5aff726d390ef34
   zh: 494faa81c81134aa
@@ -24,14 +24,23 @@
   en: 13dad40d0e31814f
   zh: 00aab8852db0d893
 /deepseek-ai-dsh-llm-agent-hint/model-experience:
-  en: 1a4d42fc8e73d40e
-  zh: d445c205dea14c22
-/deepseek-ai-dsh-llm-agent-hint/model-experience/kv-cache-effect:
-  en: b1c83f53e5638829
-  zh: 3c5d7420b2b6d6ee
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-llm-agent-hint/model-experience/agent-hint-transport-metadata:
+  en: fdf01419afd5e261
+  zh: c4c6860c31c63434
+/deepseek-ai-dsh-llm-agent-hint/model-experience/agent-hint-transport-metadata/what-the-model-sees:
+  en: b9fd7dba3673b664
+  zh: 0f8193c6c1ab8474
+/deepseek-ai-dsh-llm-agent-hint/model-experience/agent-hint-transport-metadata/token-effect:
+  en: 5acbe6f96f43a1a1
+  zh: c9b6d2db663fa4d4
+/deepseek-ai-dsh-llm-agent-hint/model-experience/agent-hint-transport-metadata/kv-cache-effect:
+  en: dc3174b876b84182
+  zh: a9cb73300e7d9533
 /deepseek-ai-dsh-llm-agent-hint/known-limitations-and-deferred-work:
-  en: bb2fc1aadc9c05cd
-  zh: ba91bcf16d252584
-/deepseek-ai-dsh-llm-agent-hint/dev-note:
-  en: da5d08a4a01cadcf
-  zh: 8f64bd26a329e6e9
+  en: 5d0c3d9d77f2b7d2
+  zh: 067ddd8beb3126dc
+/deepseek-ai-dsh-llm-agent-hint/known-limitations-and-deferred-work/dev-note:
+  en: 42e9f0d1741ada70
+  zh: d875dc7d2733b032
