@@ -10,7 +10,7 @@ Status: implemented
 
 ## Decision
 
-`LifecycleBridge.onSessionCreated` 记录 seeded 标志与 fork 父会话。只有当恢复出的 surface 已持有模型可见历史时，会话才被视为 seeded；日志里只有 `session/end-seed` 标记的空白持久化会话仍算新会话。桥接器新增 `ensureResume(sessionId, model)`，由该路由的 `prepareExtensions` 钩子在普通请求（`purpose` 未定义）经过既有 pending-op 屏障前调用。该方法对每个 seeded 会话只发送一次 `resume`，模型 id 取触发它的那条普通请求的模型 id，随后标记该会话已 resume，避免并发或后续请求重复发送。后台用途请求仍不触发 `resume`，且普通请求仍通过既有屏障等待在途的 `resume`。
+`LifecycleBridge.onSessionCreated` 记录 seeded 标志与 fork 父会话。只有当恢复出的 surface 已持有模型可见历史时，会话才被视为 seeded；日志里只有 `session/end-seed` 标记的空白持久化会话仍算新会话，且 `noteOrdinaryRequest` 绝不翻转该标志，因此 `seeded` 在会话生命周期内保持构造期事实。桥接器新增 `ensureResume(sessionId, model)`，由该路由的 `prepareExtensions` 钩子在普通请求（`purpose` 未定义）经过既有 pending-op 屏障前调用。该方法每个恢复周期只发送一次 `resume`——门控条件为 `(seeded || pauseSent) && !resumeSent`——模型 id 取触发它的那条普通请求的模型 id，随后标记该会话已 resume，避免并发或后续请求重复发送。`pauseSent` 分支覆盖被暂停后回到前台的会话（其 KV 已被 `pause` 卸载），包括未经编辑器草稿直接提交的情形；`seeded` 分支覆盖创建时即携带历史的会话。存活的新会话永不触发它，因为其连续普通请求之间两个标志都不会置位。后台用途请求仍不触发 `resume`，且普通请求仍通过既有屏障等待在途的 `resume`。
 
 `compact` 与 `stop` 行为不变。该改动只位于 `@deepseek-ai/dsh-llm-agent-hint`。
 
@@ -25,6 +25,8 @@ Status: implemented
 
 - 启动恢复不再扇出 `resume` 管理请求；只有 seeded 会话的首个普通请求才会发送。
 - 空白持久化会话沿用新会话路径：其首个普通请求声明 `start`，不发送 `resume`。
+- 存活的新会话在其连续普通请求之间不发送 `resume`；`resume` 只在会话确实被 `pause` 过、或创建时携带历史后触发。
+- 被暂停的会话在下一条普通请求时发送一次新的 `resume`，即使用户未经编辑器草稿直接提交；编辑器草稿路径仍是同一动词的更早触发点。
 - 恢复会话的第一条模型请求会通过未变的 pending-op 屏障短暂等待自己的 `resume`，随后 fail-open 放行。
 - 延迟发送的 `resume` 使用触发它的普通请求的模型 id，而非该会话最近观测到的模型 id。
 - `compact` 与 `stop` 继续使用最近观测到的模型 id。
