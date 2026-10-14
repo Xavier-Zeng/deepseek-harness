@@ -63,7 +63,7 @@
 <body>
 
 <h1>agent-hint 构建·安装·运行·验证操作手册</h1>
-<p class="sub">适配 <code>dsh-v0.2.0-agent-hint-rc.1</code> 分支（Messages 协议 + <code>prepareExtensions</code> 扩展缝）；由 2026-08-26 v0.1.1 实测手册改写，<b>端到端流程尚未在新架构上复测</b></p>
+<p class="sub">适配 <code>dsh-v0.2.0-agent-hint-rc.1</code> 分支（Messages 协议 + <code>prepareExtensions</code> 扩展缝）；<b>2026-10-08 已完成端到端复测</b>：start / 纯身份 / pause / resume / stop / compact 六种动词抓包全覆盖</p>
 
 <div class="toc">
 <b>目录</b>
@@ -82,11 +82,11 @@
 
 <p>本分支已把 agent-hint 特性全部提交，工作区无需保留任何未提交改动：</p>
 
-<pre><code>cd /home/zw/code/deepseek-harness
+<pre><code>cd /home/z00573109/deepseek-harness
 git switch dsh-v0.2.0-agent-hint-rc.1
 git status --short
-<span class="c"># 预期输出：空（干净工作区）</span>
-ls packages/llm/llm-agent-hint/src        <span class="c"># 插件本体（index/extension/lifecycle-bridge/control-client 等）</span></code></pre>
+<span class="c"># 预期输出：空（干净工作区；agent-hint-watch.mjs 为未跟踪的辅助脚本，属正常）</span>
+ls packages/llm/llm-agent-hint/src        <span class="c"># 插件本体（index/agent-hint/extension/lifecycle-bridge/control-client 等）</span></code></pre>
 
 <p>关键依赖关系（谁离不开谁）：</p>
 <table>
@@ -99,6 +99,15 @@ ls packages/llm/llm-agent-hint/src        <span class="c"># 插件本体（index
 <b>v0.1.1 → v0.2.0 架构差异：</b>旧的 <code>AgentHintAdapter</code> 子类与 <code>llm-deepseek/wire</code> 子路径已随 Messages 重写废弃。数据面注入改走 <code>prepareExtensions</code> 缝（仅 HTTP 2xx 接受后才提交 <code>start</code> 记账），控制面仍是空 messages 的 chat-completions 管理请求。
 </div>
 
+<h3>1.1 工具链与系统参数</h3>
+<pre><code><span class="c"># pnpm 缺失时（node 经 nvm 安装、无 corepack 的环境）：</span>
+npm i -g pnpm@11.7.0          <span class="c"># 对齐根 package.json 的 packageManager 字段</span>
+pnpm install
+
+<span class="c"># inotify 限额（不持久化，系统重启后需重设；否则 web 启动卡死在 chokidar 监听阶段）：</span>
+sysctl -w fs.inotify.max_user_watches=524288
+sysctl -w fs.inotify.max_user_instances=512</code></pre>
+
 <h2 id="build">2. 构建（两步编译链）</h2>
 
 <div class="callout err">
@@ -106,7 +115,7 @@ ls packages/llm/llm-agent-hint/src        <span class="c"># 插件本体（index
 </div>
 
 <h3>Step 1 — tsc 编译（产出 lib/types/*.js）</h3>
-<pre><code>cd /home/zw/code/deepseek-harness
+<pre><code>cd /home/z00573109/deepseek-harness
 npx tsc -b packages/llm/llm-agent-hint --force
 
 <span class="c"># 验证产物：</span>
@@ -114,7 +123,7 @@ ls packages/llm/llm-agent-hint/lib/types/index.js     <span class="c"># 应存�
 <p><code>--force</code> 全量重编（增量状态陈旧时稳妥）。依赖包（cordis/llm 等）若有问题 tsc 会顺带报错。</p>
 
 <h3>Step 2 — tsdown 打包（产出 lib/index.js）</h3>
-<pre><code>cd /home/zw/code/deepseek-harness
+<pre><code>cd /home/z00573109/deepseek-harness
 npx tsdown --env.DSH_BUILD_FACE host
 
 <span class="c"># 验证产物：</span>
@@ -128,75 +137,125 @@ ls packages/llm/llm-agent-hint/lib/index.js   <span class="c"># 应存在（插�
 
 <p>profile 安装是一次性的（此前已做过）。确认链接还在即可：</p>
 <pre><code>ls -l ~/.dsh/profiles/web/node_modules/@deepseek-ai/dsh-llm-agent-hint
-<span class="c"># 应显示符号链接 → ../../../../../code/deepseek-harness/packages/llm/llm-agent-hint</span>
+<span class="c"># 应显示符号链接 → ../../../../home/z00573109/deepseek-harness/packages/llm/llm-agent-hint</span>
 <span class="c"># link: 安装不复制文件，产物永远实时指向源码目录，构建后无需重新安装</span></code></pre>
 
 <p>若链接不存在（例如 profile 被重建），重新安装：</p>
-<pre><code>cd /home/zw/code/deepseek-harness
-pnpm dsh plugin --profile web add link:/home/zw/code/deepseek-harness/packages/llm/llm-agent-hint</code></pre>
+<pre><code>cd /home/z00573109/deepseek-harness
+pnpm dsh plugin --profile web add link:/home/z00573109/deepseek-harness/packages/llm/llm-agent-hint</code></pre>
 <p>出现 <i>"declares no dsh.bundle — installed as a plain dependency"</i> 警告是正常的（opt-in 插件本就不声明 bundle）。</p>
 
 <h2 id="run">4. 运行</h2>
 
-<h3>4.1 启动观察服务器（先于 web）</h3>
+<h3>4.1 启动抓包代理（先于 web）</h3>
 <div class="callout">
-<b>新架构要同时观察两个端口语义：</b>数据面走 Anthropic Messages（适配器向 <code>baseURL</code> 追加 <code>/v1/messages</code>），控制面仍是空 messages 的 OpenAI chat-completions（默认派生 <code>&lt;baseURL&gt;/v1/chat/completions</code>，可被 <code>agentHint.sessionControl.endpoint</code> 覆盖）。观察服务器需同时接收这两条路径。
+<b>新架构要同时观察两个端口语义：</b>数据面走 Anthropic Messages（适配器向 <code>baseURL</code> 追加 <code>/v1/messages</code>，日志标 <code>DATA</code>），控制面仍是空 messages 的 OpenAI chat-completions（默认派生 <code>&lt;baseURL&gt;/v1/chat/completions</code>，可被 <code>agentHint.sessionControl.endpoint</code> 覆盖，日志标 <code>CONTROL</code>）。代理同时接收这两条路径，打印 <code>agent_hint</code> 后原样转发真实 coordinator（UPSTREAM，默认 1025）。
 </div>
-<pre><code><span class="c"># 已在跑则跳过（pgrep 无输出即未跑）</span>
+<pre><code><span class="c"># 已在跑则跳过（pgrep 有输出即在跑）——但必须先确认它绑在 1026，而不是 3080</span>
 pgrep -af agent-hint-watch.mjs
-nohup node /home/zw/code/agent-hint-watch.mjs > /home/zw/code/agent-hint-watch.log 2>&1 &
+ss -ltnp 2>/dev/null | grep -E ':1026|:3080'   <span class="c"># 3080 必须空着：那一个留给 dsh web</span>
+nohup node /home/z00573109/deepseek-harness/agent-hint-watch.mjs > /tmp/agent-hint-watch.log 2>&1 &
 
-<span class="c"># 健康检查：</span>
-curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:1026/v1/models   <span class="c"># 期望 200</span></code></pre>
-<p>可选环境变量：<code>PORT</code>（默认 1026）、<code>VERBOSE=1</code>（打印完整请求体）、<code>UPSTREAM=...</code>（转发真实 coordinator）。</p>
+<span class="c"># 启动后回读端口（应打印 http://127.0.0.1:1026 -> http://127.0.0.1:1025）</span>
+tail -1 /tmp/agent-hint-watch.log
+
+<span class="c"># 健康检查（透传到 coordinator）：</span>
+curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:1025/v1/models   <span class="c"># 期望 200</span></code></pre>
+<p>可选环境变量：<code>PORT</code>（默认 1026）、<code>VERBOSE=1</code>（打印完整请求体）、<code>UPSTREAM</code>（默认 <code>http://127.0.0.1:1025</code>）。</p>
+
+<div class="callout err">
+<b>代理绝不能占 3080（2026-10-14 事故）：</b>脚本早先的 <code>PORT</code> 默认值是 <b>3080</b>，与 dsh web 的监听端口重合。此时 <code>dsh web</code> 启动报 <code>EADDRINUSE 127.0.0.1:3080</code>，并连带刷出 9 个插件"等待服务"（<code>webRuntime</code>/<code>connection</code>/<code>web-runtime</code> 等）——那<b>全是 <code>webserver</code> 起不来后的级联</b>，不是各自独立故障。而 agent 路由指向 <code>1026</code>，这个代理等同于白跑。默认值已改为 1026；若日志仍显示绑在 3080，说明是旧启动或显式设了 <code>PORT=3080</code>。
+</div>
+<div class="callout">
+<b>代理已加固（2026-10-08）：</b>协调器 PD 分离调度可能 stall 数分钟，undici 默认 300s body/header 超时会杀死中继并连带崩溃进程。脚本已内置 <code>headersTimeout: 0, bodyTimeout: 0</code> 与流 error 兜底（error 只终结该响应，不终结进程）。修改脚本后需重启代理生效。
+</div>
 
 <h3>4.2 启动 web</h3>
-<pre><code>cd /home/zw/code/deepseek-harness
-MOTOR_API_KEY=smoke-key pnpm dsh web
-<span class="c"># 输出 "dsh web: http://127.0.0.1:3080" 且无插件加载报错即成功</span></code></pre>
+<pre><code>cd /home/z00573109/deepseek-harness
+pnpm dsh web --no-open
+<span class="c"># 输出 "dsh web: http://127.0.0.1:3080/?token=..." 且无插件加载报错即成功</span>
+<span class="c"># 无需再带 MOTOR_API_KEY=smoke-key：省略 apiKeyEnv 时插件不发 authorization 头（见 4.3）</span>
+<span class="c"># 从另一台机器（如 Windows 侧浏览器）访问时，URL 必须带启动日志里的 token；</span>
+<span class="c"># 3080 经 VS Code 端口转发可达，其他端口（如 3081）不一定有转发。</span></code></pre>
 
-<h3>4.3 配置自检（新环境才需要）</h3>
-<p>v0.2.0 的 composition 全是 patch 层：home 级 <code class="path">~/.dsh/cordis.patch.yml</code>（对所有 profile 生效，优先级最高）与 profile 级 <code class="path">~/.dsh/profiles/web/cordis.patch.yml</code>。UI 的模型选择也会写进 profile 层——保存过的 UI 选择（Volatile 语义）覆盖 cordis 默认值，这是"发消息没流量"的头号原因。最小挂载示例：</p>
-<pre><code><span class="c"># ~/.dsh/cordis.patch.yml（或 profile 层）</span>
-- id: llm-agent-hint
-  name: '@deepseek-ai/dsh-llm-agent-hint'
-  config:
-    baseURL: http://127.0.0.1:1026   <span class="c"># 数据面 POST &lt;baseURL&gt;/v1/messages；控制面派生 &lt;baseURL&gt;/v1/chat/completions</span>
-    models:
-      - id: motor-model               <span class="c"># 观察服务器宣称服务的模型 id</span>
+<h3>4.3 配置自检（新环境/排障时必做）</h3>
+<p>v0.2.0 的 composition 全是 patch 层：home 级 <code class="path">~/.dsh/cordis.patch.yml</code>（对所有 profile 生效，优先级最高）与 profile 级 <code class="path">~/.dsh/profiles/web/cordis.patch.yml</code>。UI 的模型选择也会写进 profile 层——保存过的 UI 选择（Volatile 语义）覆盖 cordis 默认值，这是"发消息没流量"的头号原因。</p>
+
+<div class="callout err">
+<b>v0.2.0 patch 的 id 定向语法不能新增条目（本次事故根因）：</b><code>- id: llm-agent-hint ...</code> 只覆盖<b>已存在</b>的条目；目标不存在时 loader 仅告警 <code>patch: entry "llm-agent-hint" not found</code> 并<b>跳过</b>——插件从未加载，全部请求无 <code>agent_hint</code>。新增插件条目必须用 <code>- insert:</code> 语法（无 id 时 push 到根列表）。
+</div>
+
+<p>实测生效的最小挂载（profile 层 <code class="path">~/.dsh/profiles/web/cordis.patch.yml</code>）：</p>
+<pre><code>- insert:
+    - id: llm-agent-hint
+      name: '@deepseek-ai/dsh-llm-agent-hint'
+      config:
+        baseURL: http://127.0.0.1:1026   <span class="c"># 数据面 POST &lt;baseURL&gt;/v1/messages；控制面派生 &lt;baseURL&gt;/v1/chat/completions</span>
+        models:
+          - id: DeepSeek-V4-Flash-0731-w8a8   <span class="c"># 本环境模型 id</span>
+        <span class="c"># apiKeyEnv 省略即可：路由不发 authorization 头，无需任何 key</span>
+        <span class="c"># 如需带 key，写 apiKeyEnv: MOTOR_API_KEY 并通过 Models 页/环境变量提供，缺失则报 MISSING_CREDENTIAL</span>
 - id: agent-default-model
+  name: "@deepseek-ai/dsh-agent-default-model"
   config:
     provider: deepseek-agent-hint     <span class="c"># 固定默认路由；UI 选择会覆盖它</span>
-    model: motor-model</code></pre>
-<p>patch 文件热重载，改完不用重启。快速验证组合树（不启动服务）：</p>
-<pre><code>cd /home/zw/code/deepseek-harness
-MOTOR_API_KEY=smoke-key pnpm dsh web --dump-config 2>&1 | grep -A8 llm-agent-hint
-<span class="c"># 能看到 provider: deepseek-agent-hint / baseURL: http://127.0.0.1:1026 即正确</span></code></pre>
+    model: DeepSeek-V4-Flash-0731-w8a8</code></pre>
+<p>patch 文件热重载，改完不用重启；但<b>会话创建时钉住路由</b>——旧会话永不改走新路由，改完必须<b>新建会话</b>验证。快速验证组合树（不启动服务）：</p>
+<pre><code>cd /home/z00573109/deepseek-harness
+pnpm dsh web --dump-config 2>&1 | grep -B2 -A10 llm-agent-hint
+<span class="c"># 能看到 llm-agent-hint 条目 + provider: deepseek-agent-hint，且无 "not found" 告警即正确</span></code></pre>
 
 <h2 id="verify">5. 验证</h2>
 
 <h3>5.1 浏览器操作</h3>
 <ol>
-  <li>打开 <code>http://127.0.0.1:3080</code></li>
+  <li>先在 PC 电脑执行 ssh 隧道，把 PC 的 3080 端口直连到服务器 <code>192.168.13.173</code>：<br>
+    <code>ssh -f -N -g -L 3080:127.0.0.1:3080 root@192.168.13.173 -o ServerAliveInterval=30</code></li>
+  <li>打开 <code>http://127.0.0.1:3080/?token=&lt;启动日志中的 token&gt;</code></li>
   <li><b>新建会话</b>（旧会话在创建时已锁定旧 provider，改设置只对新会话生效）</li>
   <li>发第一条消息</li>
   <li>同一会话再发第二条（观察纯身份形态）</li>
+  <li>输入 <code>/compact</code> 触发压缩（见 5.3 的成功条件）</li>
 </ol>
 
 <h3>5.2 看日志</h3>
-<pre><code>tail -f /home/zw/code/agent-hint-watch.log</code></pre>
-<p>预期形态：</p>
-<pre><code>[hh:mm:ss] → POST /v1/messages  stream=true
-[hh:mm:ss]    agent_hint: {"session_id":"session-...","session_control":{"type":"start"}}  <span class="c"># 首条</span>
-[hh:mm:ss] → POST /v1/messages  stream=true
-[hh:mm:ss]    agent_hint: {"session_id":"session-..."}                                    <span class="c"># 第二条起：纯身份</span></code></pre>
-<p>控制面 verb（resume / pause / stop / compact）走另一条路径，空 messages：</p>
-<pre><code>[hh:mm:ss] → POST /v1/chat/completions  messages=[]
-[hh:mm:ss]    agent_hint: {"session_id":"session-...","session_control":{"type":"resume"}}</code></pre>
-<p>标题生成等后台调用（<code>purpose</code> 已定义）不携带 <code>agent_hint</code>，是<b>设计内行为</b>（匿名调用不扰动 KV-cache 身份）。</p>
+<pre><code>tail -f /tmp/agent-hint-watch.log</code></pre>
+<p>数据面（标 <code>DATA</code>，走 <code>/v1/messages</code>）：</p>
+<pre><code>[hh:mm:ss] DATA    POST /v1/messages stream=true messages=1
+  agent_hint: {"session_id":"session-...","session_control":{"type":"start"}}  <span class="c"># 首条普通请求</span>
+[hh:mm:ss] DATA    POST /v1/messages stream=true messages=3
+  agent_hint: {"session_id":"session-..."}                                     <span class="c"># 第二条起：纯身份</span></code></pre>
+<p>控制面（标 <code>CONTROL</code>，走 <code>/v1/chat/completions</code>，空 messages）：</p>
+<pre><code>[hh:mm:ss] CONTROL POST /v1/chat/completions stream=false messages=0
+  agent_hint: {"session_id":"session-...","session_control":{"type":"stop"}}</code></pre>
 
-<h3>5.3 单测补充验证（可选，不依赖 web）</h3>
-<pre><code>cd /home/zw/code/deepseek-harness
+<p>六种动词的触发时机与实测形态（2026-10-08 全部抓包确认）：</p>
+<table>
+<tr><th>动词</th><th>触发时机</th><th>实测备注</th></tr>
+<tr><td><code>start</code></td><td>fresh 会话首条<b>被接受</b>的普通请求（2xx 头到达即记账）</td><td><span class="tag ok">已验证</span> 挂在首条消息而非建会话</td></tr>
+<tr><td>纯身份 <code>{session_id}</code></td><td>start 记账后的所有普通请求</td><td><span class="tag ok">已验证</span> 压缩后的请求也保持纯身份，不重发 start</td></tr>
+<tr><td><code>pause</code></td><td>另一会话产生被接受的普通请求时，原前台会话到达 idle</td><td><span class="tag ok">已验证</span> 纯 UI 切换无流量、不发 pause（设计内）</td></tr>
+<tr><td><code>resume</code></td><td>已有内容的会话输入草稿（<code>session/composing</code>，空→非空跃迁单次触发）</td><td><span class="tag ok">已验证</span></td></tr>
+<tr><td><code>stop</code></td><td>会话归档（<code>workspace/session-archived</code>，advisory）或销毁（<code>session/disposed</code>，terminal）</td><td><span class="tag ok">已验证</span> 健康时单发</td></tr>
+<tr><td><code>compact</code></td><td><code>compaction/end</code> <b>无 error</b>（压缩成功），请协调器 evict-and-rebuild</td><td><span class="tag ok">已验证</span> 成功单发；失败不发（见 5.3）</td></tr>
+</table>
+
+<p>标题生成、压缩摘要等后台调用（<code>purpose</code> 已定义）不携带 <code>agent_hint</code>（日志 <code>agent_hint: &lt;absent&gt;</code>），是<b>设计内行为</b>（匿名调用不扰动 KV-cache 身份）。</p>
+
+<div class="callout">
+<b>失败窗口的"双发"不是缺陷：</b>控制面客户端 <code>retries=1</code>，非 2xx 或网络错误时有界重试一次。协调器 503（<code>PDRole.ROLE_U: No instance available</code>）期间，stop/resume 会在日志出现<b>恰好 2 条</b>（attempt+retry）；协调器健康时同一操作只有 1 条。管理请求（空 messages）不受推理容量影响，503 期仍 200。
+</div>
+
+<h3>5.3 compact 专项：成功条件与失败语义</h3>
+<ul>
+  <li><b>体量护栏</b>：摘要必须比被替换内容短，否则压缩失败并记入会话日志：<code>summary is not smaller than the shadowed content (摘要 tokens >= 被影 tokens)</code>。只影<b>非最近</b>回合——1~2 个短问答的会话几乎必然触发护栏。</li>
+  <li><b>可复现的成功路径</b>：先发 2~3 个长回答消息（如"推荐三个旅游攻略，每个 300 字"），让早期长回答进入可压缩区，再 <code>/compact</code>。实测 3 回合后成功：「已压缩 6 条历史记录（约 663 tokens）」。</li>
+  <li><b>失败不发动词</b>：<code>compaction/end</code> 带 error 时 bridge 直接返回，控制面零请求；成功才发单次 <code>compact</code>。两种情形都已抓包确认。</li>
+  <li><b>压缩摘要请求本身</b>（DATA，purpose 已定义）不带 <code>agent_hint</code>；压缩成功后下一条普通请求仍是纯身份（compact 动词已让协调器完成 evict-and-rebuild）。</li>
+</ul>
+
+<h3>5.4 单测补充验证（可选，不依赖 web）</h3>
+<pre><code>cd /home/z00573109/deepseek-harness
 <span class="c"># 必须从仓库根目录跑（vitest 是 workspace project 模式）：</span>
 pnpm exec vitest run packages/llm/llm-agent-hint
 <span class="c"># 预期：Test Files 4 passed / Tests 49 passed</span></code></pre>
@@ -204,10 +263,10 @@ pnpm exec vitest run packages/llm/llm-agent-hint
 <h2 id="teardown">6. 停止与还原</h2>
 
 <pre><code><span class="c"># 停 web（用 -INT 优雅退出；-9 会跳过 teardown，stop 控制请求必发不出）</span>
-pkill -INT -f "bin.ts web"
-pgrep -af "bin.ts web"          <span class="c"># 无输出 = 已退出</span>
+pkill -INT -f "dsh web"
+pgrep -af "dsh web"             <span class="c"># 无输出 = 已退出</span>
 
-<span class="c"># 停观察服务器</span>
+<span class="c"># 停抓包代理</span>
 pkill -f agent-hint-watch.mjs
 
 <span class="c"># 清构建产物（保留源码，git 不跟踪 lib/）</span>
@@ -222,8 +281,20 @@ rm -rf packages/llm/llm-agent-hint/lib</code></pre>
 <table>
 <tr><th>症状</th><th>原因与解法</th></tr>
 <tr>
+  <td><code>pnpm: command not found</code></td>
+  <td>环境无 pnpm 且无 corepack。<code>npm i -g pnpm@11.7.0</code>（对齐 packageManager 字段）后 <code>pnpm install</code></td>
+</tr>
+<tr>
+  <td>web 启动卡死、长时间无输出</td>
+  <td>inotify 限额被系统重置（默认 watches=8192/instances=128，chokidar 监听整个仓库直接耗尽）。重设：<code>sysctl -w fs.inotify.max_user_watches=524288 fs.inotify.max_user_instances=512</code>（重启后需重设）</td>
+</tr>
+<tr>
   <td>启动报 <code>listen EADDRINUSE 127.0.0.1:3080</code></td>
-  <td>已有一个 web 实例占着端口（上次启动未停）。<code>pkill -INT -f "bin.ts web"</code> 优雅退出后再启动；<code>pgrep -af "bin.ts web"</code> 可先确认</td>
+  <td><b>先查清占用者是谁，不要默认是 web 残留：</b><code>ss -ltnp | grep :3080</code>。<br>① 占用者是 <code>dsh web</code>（上次启动未停）→ <code>pkill -INT -f "dsh web"</code> 优雅退出后重启；<code>-9</code> 会跳过 teardown，stop 控制请求发不出。<br>② 占用者是 <code>agent-hint-watch.mjs</code>（2026-10-14 实例：<code>PORT</code> 未设而旧默认值为 3080）→ <code>pkill -f agent-hint-watch.mjs</code>，再按 4.1 在 <b>1026</b> 重启；此时 web 从未启动过，且代理也没接到任何 agent 流量。<br>两种情形都会连带刷出多个插件"等待服务"，那是 <code>webserver</code> 失败的级联。反向同理：1026 被占会让代理 <code>EADDRINUSE</code> 崩溃，<code>pgrep -af agent-hint-watch</code> 排查</td>
+</tr>
+<tr>
+  <td>dump-config 报 <code>patch: entry "llm-agent-hint" not found</code></td>
+  <td><b>本次事故根因</b>：patch 用 id 定向语法新增条目，v0.2.0 loader 只覆盖已存在条目，未命中即告警跳过，插件从未加载。改用 <code>- insert:</code> 语法（见 4.3），并把 <code>agent-default-model</code> 切到 <code>deepseek-agent-hint</code>，重启后<b>新建会话</b>验证</td>
 </tr>
 <tr>
   <td>tsdown 报 <code>Cannot find entry: ["lib/types/{index,invariant,startup}.js"]</code></td>
@@ -234,25 +305,41 @@ rm -rf packages/llm/llm-agent-hint/lib</code></pre>
   <td>lib/index.js 没构建（回第 2 节）；或 profile 里的 link 安装指向了旧路径，重跑第 3 节的 <code>dsh plugin add</code></td>
 </tr>
 <tr>
-  <td>web 正常回复但观察服务器零流量</td>
-  <td>请求没走 agent-hint 路由。UI 的模型选择保存在 profile patch 层并覆盖 cordis 默认值——查 <code class="path">~/.dsh/profiles/web/cordis.patch.yml</code> 里 <code>agent-default-model</code> 的 provider 是否 <code>deepseek-agent-hint</code>，改完<b>新建会话</b>再发（旧会话锁定旧路由）。若观察服务器收到了 <code>/v1/messages</code> 但无 <code>agent_hint</code> 字段，说明 prepareExtensions 没挂上，检查插件是否加载成功</td>
+  <td>web 正常回复但代理零流量 / 有流量无 <code>agent_hint</code></td>
+  <td>请求没走 agent-hint 路由。UI 的模型选择保存在 profile patch 层并覆盖 cordis 默认值——查 <code class="path">~/.dsh/profiles/web/cordis.patch.yml</code> 里 <code>agent-default-model</code> 的 provider 是否 <code>deepseek-agent-hint</code>，改完<b>新建会话</b>再发（旧会话创建时钉住旧路由）。若收到 <code>/v1/messages</code> 但无 <code>agent_hint</code> 字段，说明 prepareExtensions 没挂上或插件未组合进 profile（见上一条）</td>
+</tr>
+<tr>
+  <td>日志里 stop / resume 同秒出现 2 条</td>
+  <td>协调器 503 或网络错误窗口的有界重试（<code>retries=1</code>，attempt+retry=2），设计的容错行为。协调器健康时同一操作恰好 1 条——可用健康期再操作一次对照验证</td>
+</tr>
+<tr>
+  <td>UI 报"处理失败 TRANSPORT"、推理 503 <code>PDRole.ROLE_U: No instance available</code></td>
+  <td>协调器 PD 分离调度容量劣化，推理后端无可用实例——环境问题，找推理后端负责人。管理请求（空 messages）不受影响仍 200，控制面动词照常</td>
+</tr>
+<tr>
+  <td><code>/compact</code> 报 "Compaction could not produce a useful summary"</td>
+  <td>体量护栏：摘要不短于被替换内容（会话日志有具体 token 数）。会话太短/内容太新时属正常。先发 2~3 个长回答消息再压缩；失败不会产生 compact 控制请求（设计内）</td>
+</tr>
+<tr>
+  <td>切换会话时没有任何带 <code>agent_hint</code> 的请求</td>
+  <td>纯 UI 切换不产生 LLM 流量，<code>pause</code> 只在另一会话产生<b>被接受的普通请求</b>时触发——设计内行为，与 v0.1.1 一致。想观察 pause：在 A 会话发消息后，切到 B 会话发消息，A 会收到 pause</td>
+</tr>
+<tr>
+  <td>浏览器打不开 3080 / ERR_CONNECTION_REFUSED</td>
+  <td>跨机器访问靠 VS Code 端口转发，确认转发的是 3080 且 URL 带 <code>?token=...</code>（token 在 web 启动日志里）；未转发的端口（如 3081）不可达</td>
 </tr>
 <tr>
   <td>vitest 报 "No test files found"</td>
   <td>在包目录里跑的。回到仓库根目录：<code>pnpm exec vitest run packages/llm/llm-agent-hint</code></td>
 </tr>
 <tr>
-  <td>观察服务器 curl 不通</td>
-  <td>没启动或端口被占：<code>pgrep -af agent-hint-watch</code> 检查；重启见 4.1</td>
-</tr>
-<tr>
-  <td>缺 API key 报 <code>MISSING_CREDENTIAL</code></td>
-  <td>启动 web 时没带 <code>MOTOR_API_KEY=smoke-key</code>（观察服务器不校验 key，但适配器在发请求前要求它存在）</td>
+  <td>配了 <code>apiKeyEnv</code> 却报 <code>MISSING_CREDENTIAL</code></td>
+  <td>显式写了 <code>apiKeyEnv: MOTOR_API_KEY</code> 但该引用解析为空。补一个非空值（Models 页保存，或启动环境导出，或写进仓库根 <code>.env</code>）；<b>不想要 key 就直接删掉这一行</b>——省略 <code>apiKeyEnv</code> 时路由不发 <code>authorization</code> 头，天然免 key</td>
 </tr>
 </table>
 
 <footer>
-来源：2026-08-26 v0.1.1 实测手册 · 2026-09-29 适配 dsh-v0.2.0-agent-hint-rc.1（Messages 数据面 + prepareExtensions 扩展缝，端到端流程待复测）· 构建链路：tsc -b（lib/types）→ tsdown host face（lib/）
+来源：2026-08-26 v0.1.1 实测手册 · 2026-09-29 适配 dsh-v0.2.0-agent-hint-rc.1 · 2026-10-08 端到端复测完成（六动词抓包全覆盖）：修正 patch insert 语法（事故根因）、环境路径与端口、inotify/pnpm 前置、compact 体量护栏与失败语义、503 窗口有界重试说明 · 2026-10-14 补充 3080 端口占用归因（代理默认端口事故：脚本 <code>PORT</code> 默认值 3080 → 1026）· 2026-10-14 <code>apiKeyEnv</code> 改为可选（省略即无凭据，不再需要 <code>MOTOR_API_KEY=smoke-key</code>）· 构建链路：tsc -b（lib/types）→ tsdown host face（lib/）
 </footer>
 
 </body>

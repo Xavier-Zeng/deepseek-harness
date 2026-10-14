@@ -8,7 +8,8 @@
  * against the coordinator's chat-completions infer endpoint.
  * The transport layer is the `llm-deepseek` pipeline with a route-scoped
  * `prepareExtensions`; connection facts resolve per request exactly as in
- * `llm-deepseek`, and every control-plane failure is fail-open (WARN only).
+ * `llm-deepseek`, an omitted `apiKeyEnv` sends requests unauthenticated, and
+ * every control-plane failure is fail-open (WARN only).
  * @module @deepseek-ai/dsh-llm-agent-hint
  */
 
@@ -25,7 +26,7 @@ import { DEFAULT_PENDING_OP_AWAIT_MS, LifecycleBridge } from './lifecycle-bridge
 
 export { buildAgentHint } from './agent-hint.ts'
 export type { AgentHintInputs } from './agent-hint.ts'
-export { Config, DEFAULT_API_KEY_ENV, DEFAULT_BASE_URL, DEFAULT_PROVIDER, plainOptions, resolveAdapterOptions } from './config.ts'
+export { Config, DEFAULT_BASE_URL, DEFAULT_PROVIDER, plainOptions, resolveAdapterOptions } from './config.ts'
 export type { AgentHintConfig, Options, ResolvedAgentHintOptions, SessionControlConfig } from './config.ts'
 export { DEFAULT_CONTROL_RETRIES, DEFAULT_CONTROL_TIMEOUT_MS, SessionControlClient } from './control-client.ts'
 export type { ControlWarnSink, SessionControlClientOptions } from './control-client.ts'
@@ -42,8 +43,9 @@ export function apply(ctx: Context, config: Config): void {
   const provider = config.provider
   const options = () => resolveAdapterOptions(plainOptions(config), launchEnvironmentOf(ctx))
   options()
-  const resolveApiKey = async (connection: ResolvedAgentHintOptions): Promise<string> => {
+  const resolveApiKey = async (connection: ResolvedAgentHintOptions): Promise<string | undefined> => {
     const ref = connection.apiKeyEnv
+    if (ref === undefined) return undefined
     const credentials = ctx.get('credentials')
     if (credentials !== undefined) {
       const hit = await credentials.resolve(ref)
@@ -91,7 +93,10 @@ export function apply(ctx: Context, config: Config): void {
   registerDeepSeekProvider(ctx, provider, {
     options,
     providerName: 'DeepSeek (agent-hint)',
-    resolveAuth: async connection => ({ headers: { authorization: `Bearer ${await resolveApiKey(connection)}` } }),
+    resolveAuth: async (connection) => {
+      const key = await resolveApiKey(connection)
+      return { headers: key === undefined ? {} : { authorization: `Bearer ${key}` } }
+    },
     discoverModels: route => Promise.resolve(options().models.map(model => catalogModelInfo(route, model))),
     ...hintEnabled
       ? {

@@ -30,7 +30,7 @@ Two planes ship in one plugin. The **data plane** is a route-scoped `prepareExte
   name: '@deepseek-ai/dsh-llm-agent-hint'
   config:
     provider: deepseek-agent-hint   # route id; changing it requires a reload
-    apiKeyEnv: MOTOR_API_KEY        # default; resolved per request via the credentials service, then the environment
+    apiKeyEnv: MOTOR_API_KEY        # optional; omitted sends requests unauthenticated (no Authorization header)
     baseURL: http://127.0.0.1:1025  # default local coordinator Messages root; the transport appends /v1/messages
     models:                         # optional; advisory catalog mirroring the coordinator's served models
       - id: deepseek-v4-flash
@@ -47,7 +47,7 @@ Two planes ship in one plugin. The **data plane** is a route-scoped `prepareExte
         retries: 1                  # transport-level retries after the first failed attempt
 ```
 
-`apiKeyEnv` defaults to `MOTOR_API_KEY` and resolves per request; missing credentials fail with `MISSING_CREDENTIAL`. The remaining transport fields (`thinking`, `reasoningEffort`, `maxTokens`, `defaultContextWindow`, `streamIdleTimeoutMs`, `retryPolicy`, image and Files budgets) mirror `llm-deepseek` exactly and resolve per request through the same volatile-configuration machinery. The route appears in `ctx.llm.listConfigurableProviders()` as `DeepSeek (agent-hint)`; `models` advertises an advisory catalog and unlisted model ids still pass through unchanged.
+`apiKeyEnv` is optional and resolves per request; omitting it leaves the route deliberately unauthenticated — ordinary and control requests then carry no `authorization` header — while a named reference that resolves to nothing fails with `MISSING_CREDENTIAL`. The remaining transport fields (`thinking`, `reasoningEffort`, `maxTokens`, `defaultContextWindow`, `streamIdleTimeoutMs`, `retryPolicy`, image and Files budgets) mirror `llm-deepseek` exactly and resolve per request through the same volatile-configuration machinery. The route appears in `ctx.llm.listConfigurableProviders()` as `DeepSeek (agent-hint)`; `models` advertises an advisory catalog and unlisted model ids still pass through unchanged.
 
 Data plane rules, owned by `buildAgentHint` in order: defined `purpose` calls (`compaction`, `session-title`) stay unprefixed; anonymous requests stay unprefixed; `parent_session_id` and `cache_control` attach whenever known, including on verb-carrying requests; `session_control: start` rides only the first accepted ordinary request of a fresh session, and a seeded session (one created with model-visible surface history) never declares `start`. A blank persisted session has no surface history, stays fresh, and declares `start`.
 

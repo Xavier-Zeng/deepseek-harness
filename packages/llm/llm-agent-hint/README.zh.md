@@ -30,7 +30,7 @@ kind: "package-reference"
   name: '@deepseek-ai/dsh-llm-agent-hint'
   config:
     provider: deepseek-agent-hint   # route id; changing it requires a reload
-    apiKeyEnv: MOTOR_API_KEY        # default; resolved per request via the credentials service, then the environment
+    apiKeyEnv: MOTOR_API_KEY        # optional; omitted sends requests unauthenticated (no Authorization header)
     baseURL: http://127.0.0.1:1025  # default local coordinator Messages root; the transport appends /v1/messages
     models:                         # optional; advisory catalog mirroring the coordinator's served models
       - id: deepseek-v4-flash
@@ -47,7 +47,7 @@ kind: "package-reference"
         retries: 1                  # transport-level retries after the first failed attempt
 ```
 
-`apiKeyEnv` 默认 `MOTOR_API_KEY` 并逐请求解析；缺失凭据以 `MISSING_CREDENTIAL` 失败。其余传输字段（`thinking`、`reasoningEffort`、`maxTokens`、`defaultContextWindow`、`streamIdleTimeoutMs`、`retryPolicy`、图像与 Files 预算）与 `llm-deepseek` 完全一致，经同一套 volatile 配置机制逐请求解析。该路由以 `DeepSeek (agent-hint)` 出现在 `ctx.llm.listConfigurableProviders()`；`models` 发布建议性目录，未列出的模型 id 仍原样透传。
+`apiKeyEnv` 可选并逐请求解析；省略时该路由被有意设为无凭据——普通请求与控制请求都不带 `authorization` 头——而写入的引用解析为空时以 `MISSING_CREDENTIAL` 失败。其余传输字段（`thinking`、`reasoningEffort`、`maxTokens`、`defaultContextWindow`、`streamIdleTimeoutMs`、`retryPolicy`、图像与 Files 预算）与 `llm-deepseek` 完全一致，经同一套 volatile 配置机制逐请求解析。该路由以 `DeepSeek (agent-hint)` 出现在 `ctx.llm.listConfigurableProviders()`；`models` 发布建议性目录，未列出的模型 id 仍原样透传。
 
 数据面规则由 `buildAgentHint` 按序拥有：带定义 `purpose` 的调用（`compaction`、`session-title`）保持无前缀；匿名请求保持无前缀；`parent_session_id` 与 `cache_control` 在已知时随时附加，包括携带动词的请求；`session_control: start` 只搭在新会话首个被接受的普通请求上，带历史会话（创建时已有模型可见 surface 历史）永不声明 `start`。空白持久化会话没有 surface 历史，仍为新鲜会话并声明 `start`。
 

@@ -10,8 +10,6 @@ import { DEFAULT_CONTROL_RETRIES, DEFAULT_CONTROL_TIMEOUT_MS } from './control-c
 import { DEFAULT_PENDING_OP_AWAIT_MS } from './lifecycle-bridge.ts'
 import type { AgentHintCacheControl } from './types.ts'
 
-/** Credential environment variable resolved per request. */
-export const DEFAULT_API_KEY_ENV = 'MOTOR_API_KEY'
 /** The provider route this plugin owns; read at plugin load. */
 export const DEFAULT_PROVIDER = 'deepseek-agent-hint'
 /** Coordinator Messages API root; the adapter appends `/v1/messages`. */
@@ -41,10 +39,13 @@ export interface AgentHintConfig {
   sessionControl: SessionControlConfig
 }
 
-/** Messages configuration for the agent-hint route, with a per-request credential reference. */
+/** Messages configuration for the agent-hint route, with an optional per-request credential reference. */
 export interface Config extends ProtocolConfig {
-  /** Credential reference resolved per request; defaults to MOTOR_API_KEY. */
-  apiKeyEnv: Volatile<string>
+  /**
+   * Credential reference resolved per request. `undefined` (the default) leaves
+   * the route deliberately unauthenticated: requests carry no `authorization` header.
+   */
+  apiKeyEnv: Volatile<string | undefined>
   /** Provider route id; read at plugin load (changing it requires a reload). */
   provider: string
   /** The two `agent_hint` planes. */
@@ -55,7 +56,7 @@ export const Config = z.object({
   ...deepSeekConfigFields,
   baseURL: z.string().default(DEFAULT_BASE_URL).volatile(),
   models: deepSeekConfigFields.models.default([]),
-  apiKeyEnv: z.string().role('credential-ref').default(DEFAULT_API_KEY_ENV).volatile(),
+  apiKeyEnv: z.string().role('credential-ref').volatile(),
   provider: z.string().default(DEFAULT_PROVIDER),
   agentHint: z.object({
     enabled: z.boolean().default(true),
@@ -80,8 +81,8 @@ export type Options = ProtocolOptions & { apiKeyEnv?: string }
 
 /** Endpoint and credential reference captured from the same configuration generation. */
 export interface ResolvedAgentHintOptions extends DeepSeekConnectionOptions {
-  /** Credential reference used only for this connection snapshot. */
-  apiKeyEnv: CredentialRef
+  /** Credential reference used only for this connection snapshot; absent sends unauthenticated requests. */
+  apiKeyEnv: CredentialRef | undefined
 }
 
 /** Read one validated provider configuration.
@@ -89,14 +90,19 @@ export interface ResolvedAgentHintOptions extends DeepSeekConnectionOptions {
  * @returns detached resolver inputs.
  */
 export function plainOptions(config: Config): Options {
-  return { ...protocolOptions(config), apiKeyEnv: config.apiKeyEnv.get() }
+  const apiKeyEnv = config.apiKeyEnv.get()
+  return { ...protocolOptions(config), ...apiKeyEnv === undefined ? {} : { apiKeyEnv } }
 }
 
 /** Resolve route and protocol settings together.
  * @param config - raw deployment settings.
  * @param environment - application launch environment.
- * @returns validated endpoint facts and the matching credential reference.
+ * @returns validated endpoint facts and the matching credential reference, or `undefined` when the route names none.
  */
 export function resolveAdapterOptions(config: Options, environment?: LaunchEnvironmentSnapshot): ResolvedAgentHintOptions {
-  return { ...resolveProtocolOptions(config, environment), apiKeyEnv: credentialRef(config.apiKeyEnv ?? DEFAULT_API_KEY_ENV) }
+  const apiKeyEnv = config.apiKeyEnv
+  return {
+    ...resolveProtocolOptions(config, environment),
+    apiKeyEnv: apiKeyEnv === undefined ? undefined : credentialRef(apiKeyEnv),
+  }
 }

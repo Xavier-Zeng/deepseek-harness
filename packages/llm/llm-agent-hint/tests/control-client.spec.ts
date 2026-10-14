@@ -27,6 +27,7 @@ describe('SessionControlClient', () => {
     model?: string
     timeoutMs?: number
     retries?: number
+    resolveApiKey?: () => Promise<string | undefined>
   }): SessionControlClient {
     return new SessionControlClient({
       endpoint: 'http://coordinator.test/v1/chat/completions',
@@ -106,6 +107,17 @@ describe('SessionControlClient', () => {
     const init = call[1] as RequestInit
     const headers = init.headers as Record<string, string>
     expect(headers['authorization']).toBe('Bearer k')
+    expect(headers['content-type']).toBe('application/json')
+  })
+
+  it('omits the authorization header when no credential resolves', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(200))
+    await client({ resolveApiKey: () => Promise.resolve(undefined) }).send('resume', 'session-1')
+    const call = fetchMock.mock.calls[0]
+    if (call === undefined) throw new Error('missing fetch call')
+    const init = call[1] as RequestInit
+    const headers = init.headers as Record<string, string>
+    expect(headers['authorization']).toBeUndefined()
     expect(headers['content-type']).toBe('application/json')
   })
 })

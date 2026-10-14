@@ -24,8 +24,8 @@ export interface ControlWarnSink {
 export interface SessionControlClientOptions {
   /** Full manage-request URL; the coordinator's chat-completions infer endpoint. */
   endpoint: string
-  /** Resolves the bearer token for one manage request. */
-  resolveApiKey: () => Promise<string>
+  /** Resolves the bearer token for one manage request; `undefined` sends it unauthenticated. */
+  resolveApiKey: () => Promise<string | undefined>
   /** Served model id carried on manage requests; any served id is accepted. */
   model: string
   /** Per-request timeout in milliseconds. */
@@ -104,10 +104,11 @@ export class SessionControlClient {
   ): Promise<'sent' | 'failed'> {
     const timeout = AbortSignal.timeout(this.options.timeoutMs)
     try {
+      const key = await this.options.resolveApiKey()
       const response = await fetch(this.options.endpoint, {
         method: 'POST',
         headers: {
-          'authorization': `Bearer ${await this.options.resolveApiKey()}`,
+          ...key === undefined ? {} : { 'authorization': `Bearer ${key}` },
           'content-type': 'application/json',
           ...attributionHeaders(),
         },

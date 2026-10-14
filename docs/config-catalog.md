@@ -1567,13 +1567,16 @@ export interface Config {
 
 - `inject`: `llm`
 - `refs`: [`DeepSeekLlmApiJson`](../packages/llm/deepseek-llm-api-extensions/src/index.ts) · [`ProtocolConfig`](../packages/llm/llm-deepseek/src/index.ts) · `Volatile` (`@deepseek-ai/cordis`)
-- `source`: [`packages/llm/llm-agent-hint/src/config.ts:45`](../packages/llm/llm-agent-hint/src/config.ts)
+- `source`: [`packages/llm/llm-agent-hint/src/config.ts:43`](../packages/llm/llm-agent-hint/src/config.ts)
 
 ```ts config-catalog
-/** Messages configuration for the agent-hint route, with a per-request credential reference. */
+/** Messages configuration for the agent-hint route, with an optional per-request credential reference. */
 export interface Config extends ProtocolConfig {
-  /** Credential reference resolved per request; defaults to MOTOR_API_KEY. */
-  apiKeyEnv: Volatile<string>
+  /**
+   * Credential reference resolved per request. `undefined` (the default) leaves
+   * the route deliberately unauthenticated: requests carry no `authorization` header.
+   */
+  apiKeyEnv: Volatile<string | undefined>
   /** Provider route id; read at plugin load (changing it requires a reload). */
   provider: string
   /** The two `agent_hint` planes. */
